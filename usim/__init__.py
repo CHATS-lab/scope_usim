@@ -41,6 +41,7 @@ from usim.core.types import (
     compute_token_delta,
 )
 from usim.core.model_adapter import ModelAdapter
+from usim.core.api_model_adapter import OpenAIModelAdapter, create_openai_model_adapter
 from usim.core.orchestrator import UserSimOrchestrator, run_session_sync
 
 __all__ = [
@@ -55,6 +56,8 @@ __all__ = [
     "UserState",
     "AgentState",
     "ModelAdapter",
+    "OpenAIModelAdapter",
+    "create_openai_model_adapter",
     "UserSimOrchestrator",
     "run_session_sync",
     "compute_token_delta",

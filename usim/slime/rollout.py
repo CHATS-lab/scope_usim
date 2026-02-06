@@ -5,6 +5,7 @@ integrating usim's orchestrator with Slime's data pipeline.
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 from usim.core.orchestrator import UserSimOrchestrator
@@ -35,12 +36,37 @@ async def usim_generate_rollout(
         List of Slime Sample objects with trajectories
     """
     try:
-        # Create model adapters
+        # Agent model = trainable, served by SGLang
         agent_model = create_slime_model_adapter(args)
-        user_model = create_slime_model_adapter(args)
+
+        # User sim model = fixed opponent via API (or same SGLang model if not configured)
+        fixed_usim_models = getattr(args, "usim_fixed_opponent_model", None)
+        if fixed_usim_models:
+            from usim.core.api_model_adapter import create_openai_model_adapter
+
+            base_url = getattr(args, "usim_fixed_opponent_base_url", "https://api.openai.com/v1")
+            api_key_var = getattr(args, "usim_fixed_opponent_api_key_var", "OPENAI_API_KEY")
+            api_key = os.environ.get(api_key_var)
+
+            # Support model rotation: comma-separated list of models
+            model_list = [m.strip() for m in fixed_usim_models.split(",") if m.strip()]
+            model_name = model_list[sample.index % len(model_list)]
+
+            user_model = create_openai_model_adapter(
+                model_name=model_name,
+                tokenizer=agent_model.tokenizer,
+                base_url=base_url,
+                api_key=api_key,
+            )
+            logger.info(
+                f"Using fixed user sim: {model_name} "
+                f"(sample {sample.index}, {len(model_list)} model(s) in rotation)"
+            )
+        else:
+            user_model = create_slime_model_adapter(args)
 
         # Get configuration from args
-        trainable_role = TrainableRole(getattr(args, "trainable_role", "user"))
+        trainable_role = TrainableRole(getattr(args, "trainable_role", "agent"))
         max_turns = getattr(args, "max_turns", 30)
         max_tokens = getattr(args, "max_tokens", 2048)
 
@@ -136,7 +162,7 @@ def add_usim_arguments(parser: Any) -> None:
     group.add_argument(
         "--trainable-role",
         type=str,
-        default="user",
+        default="agent",
         choices=["agent", "user", "both"],
         help="Which role(s) to train: agent, user, or both",
     )

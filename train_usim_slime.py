@@ -26,7 +26,7 @@ def add_usim_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--trainable-role",
         type=str,
-        default="user",
+        default="agent",
         choices=["agent", "user", "both"],
         help="Which role(s) to train: agent, user, or both",
     )
@@ -67,6 +67,31 @@ def add_usim_arguments(parser: argparse.ArgumentParser) -> None:
         help="Max tokens per user simulator generation",
     )
 
+    group.add_argument(
+        "--usim-fixed-opponent-model",
+        type=str,
+        default=None,
+        help=(
+            "Fixed user sim model(s) via OpenAI-compatible API. "
+            "Comma-separated for rotation (e.g., 'gpt-5-mini' or "
+            "'gpt-5-mini,gpt-4o-mini,deepseek-v3.2')"
+        ),
+    )
+
+    group.add_argument(
+        "--usim-fixed-opponent-base-url",
+        type=str,
+        default="https://api.openai.com/v1",
+        help="Base URL for fixed user sim API",
+    )
+
+    group.add_argument(
+        "--usim-fixed-opponent-api-key-var",
+        type=str,
+        default="OPENAI_API_KEY",
+        help="Environment variable name for fixed user sim API key",
+    )
+
 
 def main() -> None:
     """Main entry point for USIM training with Slime."""
@@ -91,6 +116,13 @@ def main() -> None:
     logger.info(f"Domain: {args.usim_domain}")
     logger.info(f"Rollout function: {args.rollout_function_path}")
     logger.info(f"Data source: {args.data_source_path}")
+    logger.info("Agent (trainable): SGLang model")
+    fixed_opponent = getattr(args, "usim_fixed_opponent_model", None)
+    if fixed_opponent:
+        models = [m.strip() for m in fixed_opponent.split(",") if m.strip()]
+        logger.info(f"User sim (fixed): {models} via {args.usim_fixed_opponent_base_url}")
+    else:
+        logger.info("User sim: same SGLang model (no fixed opponent)")
     logger.info("=" * 60)
 
     # Start training
