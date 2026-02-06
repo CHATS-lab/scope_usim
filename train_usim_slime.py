@@ -92,13 +92,16 @@ def add_usim_arguments(parser: argparse.ArgumentParser) -> None:
         help="Environment variable name for fixed user sim API key",
     )
 
+    return parser
+
 
 def main() -> None:
     """Main entry point for USIM training with Slime."""
     try:
-        from slime.train_async import parse_args, train
-    except ImportError:
-        logger.error("slime package not found. Install with: pip install slime")
+        from slime.train import train
+        from slime.utils.arguments import parse_args
+    except ImportError as e:
+        logger.error(f"slime import failed: {e}", exc_info=True)
         sys.exit(1)
 
     # Parse arguments with USIM additions
@@ -106,7 +109,7 @@ def main() -> None:
 
     # Configure USIM-specific settings
     args.rollout_function_path = args.rollout_function_path or "usim.slime.rollout.usim_generate_rollout"
-    args.data_source_path = args.data_source_path or "usim.slime.data_source.get_tau2_samples"
+    args.data_source_path = args.data_source_path or "usim.slime.data_source.get_tau2_data_source"
 
     logger.info("=" * 60)
     logger.info("USIM Training Configuration")

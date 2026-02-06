@@ -29,7 +29,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
 OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0206_tau2/$(date +%Y%m%d_%H%M%S)}"
-WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/workspace}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
 
@@ -44,7 +44,7 @@ CKPT_ARGS=(
 )
 
 ROLLOUT_ARGS=(
-   --data-source-path usim.slime.data_source.get_tau2_samples
+   --data-source-path usim.slime.data_source.get_tau2_data_source
    --rollout-function-path usim.slime.rollout.usim_generate_rollout
    --num-rollout 1000
    --rollout-batch-size 16
@@ -112,10 +112,13 @@ eval:
 
   datasets:
     - name: tau2_retail_test
-      domain: retail
-      task_split: test
-      max_tasks: 50
+      path: "usim://tau2/retail/test"
       n_samples_per_eval_prompt: 1
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 50
 EOF
 
 EVAL_ARGS=(
@@ -150,7 +153,7 @@ ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-s
 
 RUNTIME_ENV_JSON="{
   \"env_vars\": {
-    \"PYTHONPATH\": \"${PROJECT_ROOT}:${SLIME_DIR}\",
+    \"PYTHONPATH\": \"/root/Megatron-LM/\",
     \"CUDA_DEVICE_MAX_CONNECTIONS\": \"1\",
     \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\"
   }

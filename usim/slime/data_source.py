@@ -3,32 +3,45 @@
 import logging
 from typing import Any, Dict, Iterator, List, Optional
 
+from slime.rollout.data_source import DataSource
+from slime.utils.types import Sample
+
 logger = logging.getLogger(__name__)
 
 
-class Tau2DataSource:
+class Tau2DataSource(DataSource):
     """Data source for tau2-bench tasks.
 
-    Loads tasks from tau2-bench and converts them to Slime Sample format.
+    Loads tasks from tau2-bench and provides them as Slime Samples.
+    Like SPARE, USIM generates conversations on-the-fly during rollout,
+    so this data source provides minimal samples with task metadata.
     """
 
-    def __init__(
-        self,
-        domain: str = "retail",
-        task_split: str = "test",
-        max_tasks: Optional[int] = None,
-    ):
+    def __init__(self, args):
         """Initialize the tau2-bench data source.
 
         Args:
-            domain: tau2-bench domain (retail, airline, telecom)
-            task_split: Task split to load (train, test)
-            max_tasks: Optional limit on number of tasks
+            args: Slime arguments (uses USIM-specific attributes)
         """
-        self.domain = domain
-        self.task_split = task_split
-        self.max_tasks = max_tasks
+        self.args = args
+        self.domain = getattr(args, "usim_domain", "retail")
+        self.task_split = getattr(args, "task_split", "test")
+        self.max_tasks = getattr(args, "max_tasks", None)
+
+        # Initialize tracking attributes (required by DataSource)
+        self.epoch_id = 0
+        self.sample_group_index = 0
+        self.sample_index = 0
+        self.sample_offset = 0
+        self.metadata = {}
+
         self._tasks: Optional[List[Any]] = None
+
+        logger.info(
+            f"[USIM] Initialized Tau2DataSource: "
+            f"domain={self.domain}, split={self.task_split}, "
+            f"max_tasks={self.max_tasks}"
+        )
 
     def _load_tasks(self) -> List[Any]:
         """Load tasks from tau2-bench."""
@@ -53,107 +66,74 @@ class Tau2DataSource:
             self._tasks = []
             return []
 
-    def __len__(self) -> int:
-        """Get number of tasks."""
-        return len(self._load_tasks())
+    def _task_to_sample(self, task: Any, group_index: int, index: int) -> Sample:
+        """Convert tau2-bench Task to Slime Sample."""
+        return Sample(
+            group_index=group_index,
+            index=index,
+            prompt=task.user_instructions.instructions if task.user_instructions else "",
+            tokens=[],
+            response="",
+            reward=0.0,
+            loss_mask=[],
+            response_length=0,
+            metadata={
+                "task_id": task.id,
+                "domain": self.domain,
+                "initial_state": task.initial_state,
+                "evaluation": task.evaluation,
+            },
+        )
 
-    def __iter__(self) -> Iterator[Dict[str, Any]]:
-        """Iterate over tasks as dicts."""
-        for task in self._load_tasks():
-            yield self._task_to_dict(task)
+    def get_samples(self, num_samples: int) -> List[List[Sample]]:
+        """Return samples for rollout.
 
-    def __getitem__(self, index: int) -> Dict[str, Any]:
-        """Get task by index."""
+        Each sample contains task metadata that the rollout function uses
+        to set up the conversation.
+        """
         tasks = self._load_tasks()
-        return self._task_to_dict(tasks[index])
 
-    def _task_to_dict(self, task: Any) -> Dict[str, Any]:
-        """Convert tau2-bench Task to dict format.
-
-        Args:
-            task: tau2-bench Task object
-
-        Returns:
-            Task as dictionary
-        """
-        return {
-            "id": task.id,
-            "domain": self.domain,
-            "instructions": task.user_instructions.instructions if task.user_instructions else "",
-            "domain_policy": "",  # Loaded from environment
-            "initial_state": task.initial_state,
-            "evaluation": task.evaluation,
-        }
-
-    def to_slime_samples(self) -> List[Any]:
-        """Convert all tasks to Slime Sample format.
-
-        Returns:
-            List of Slime Sample objects
-        """
-        try:
-            from slime.data.types import Sample
-        except ImportError:
-            raise ImportError("slime package required for to_slime_samples")
+        if not tasks:
+            return [[Sample(group_index=i, index=i) for _ in range(self.args.n_samples_per_prompt)] for i in range(num_samples)]
 
         samples = []
-        for i, task_dict in enumerate(self):
-            sample = Sample(
-                index=i,
-                prompt=task_dict["instructions"],
-                tokens=[],  # Will be filled during rollout
-                response="",
-                reward=0.0,
-                loss_mask=[],
-                response_length=0,
-                metadata={
-                    "task_id": task_dict["id"],
-                    "domain": task_dict["domain"],
-                    "domain_policy": task_dict["domain_policy"],
-                    "initial_state": task_dict["initial_state"],
-                },
-            )
-            samples.append(sample)
+        for _ in range(num_samples):
+            task_idx = self.sample_offset % len(tasks)
+            task = tasks[task_idx]
+            self.sample_offset += 1
+
+            group = []
+            for _ in range(self.args.n_samples_per_prompt):
+                sample = self._task_to_sample(task, self.sample_group_index, self.sample_index)
+                self.sample_index += 1
+                group.append(sample)
+            self.sample_group_index += 1
+            samples.append(group)
 
         return samples
 
+    def add_samples(self, samples: List[List[Sample]]):
+        """No-op: USIM generates conversations on-the-fly."""
+        pass
 
-def create_tau2_data_source(
-    domain: str = "retail",
-    task_split: str = "test",
-    max_tasks: Optional[int] = None,
-) -> Tau2DataSource:
-    """Factory function to create a tau2-bench data source.
+    def save(self, rollout_id):
+        """Save data source state."""
+        pass
 
-    Args:
-        domain: tau2-bench domain
-        task_split: Task split to load
-        max_tasks: Optional task limit
-
-    Returns:
-        Configured Tau2DataSource
-    """
-    return Tau2DataSource(
-        domain=domain,
-        task_split=task_split,
-        max_tasks=max_tasks,
-    )
+    def load(self, rollout_id=None):
+        """Load data source state."""
+        pass
 
 
-def get_tau2_samples(
-    domain: str = "retail",
-    task_split: str = "test",
-    max_tasks: Optional[int] = None,
-) -> List[Any]:
-    """Convenience function to get tau2-bench tasks as Slime samples.
+def get_tau2_data_source(args) -> Tau2DataSource:
+    """Factory function called by Slime's RolloutManager.
+
+    This is the entry point referenced by --data-source-path.
 
     Args:
-        domain: tau2-bench domain
-        task_split: Task split to load
-        max_tasks: Optional task limit
+        args: Slime arguments
 
     Returns:
-        List of Slime Sample objects
+        Configured Tau2DataSource instance
     """
-    data_source = create_tau2_data_source(domain, task_split, max_tasks)
-    return data_source.to_slime_samples()
+    return Tau2DataSource(args)
