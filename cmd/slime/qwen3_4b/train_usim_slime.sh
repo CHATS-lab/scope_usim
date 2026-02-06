@@ -24,7 +24,7 @@ echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-SLIME_DIR="${PROJECT_ROOT}/../slime"
+SLIME_DIR="${PROJECT_ROOT}/slime"
 
 OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/workspace}"
