@@ -40,6 +40,12 @@ Line length is 100 characters. Target Python is 3.10+.
 ```bash
 # 0206 experiment: Qwen3-4B-Instruct + gpt-5-mini user sim on tau2-bench retail
 bash cmd/slime/qwen3_4b_instruct/0206/train_tau2.sh
+
+# CooperBench: Qwen3-4B-Instruct + gpt-5-mini partner on CooperBench lite
+bash cmd/slime/qwen3_4b_instruct/0206/train_cooperbench.sh
+
+# Persuasion for Good: Qwen3-4B-Instruct (persuader) + gpt-5-mini (persuadee)
+bash cmd/slime/qwen3_4b_instruct/0206/train_p4g.sh
 ```
 
 ## Architecture
@@ -53,6 +59,10 @@ The `usim/core/` package defines all interfaces as `@runtime_checkable` Protocol
 - `OpenAIModelAdapter` (`core/api_model_adapter.py`) — Wraps AsyncOpenAI for fixed opponent. Shares the local tokenizer with the trainable model for token tracking. Logprobs = 0.0 (not trained).
 - `BaseAgent` (`core/agent/base.py`) — Agent with `build_messages()`, `parse_response()`.
 - `BaseUserSimulator` (`core/user_simulator/base.py`) — User sim with `build_messages()`, `parse_response()`.
+
+### Environment Directory Convention
+
+Environment implementations go under `usim/core/environment/{env_name}/` alongside the protocol at `usim/core/environment/base.py`. Each environment package has its own `__init__.py`, sandbox wrapper, and any connectors.
 
 ### Orchestration Flow (`core/orchestrator.py`)
 
@@ -87,6 +97,17 @@ The API adapter shares the SGLang model's tokenizer for token-in-token-out track
 
 `LLMUserSimulator.build_messages()` flips roles so the LLM generates as "assistant" internally, then `parse_response()` converts output to "user" role.
 
+### Coding Orchestrator (`core/coding_orchestrator.py`)
+
+`CodingAgentOrchestrator` manages agent ↔ environment coding loops (no user simulator). Used for CooperBench.
+
+Key differences from `UserSimOrchestrator`:
+- No user simulator — only agent + environment (bash sandbox)
+- Agent responses parsed for bash code blocks via regex
+- Environment executes command, returns observation as "user" message
+- Incoming partner messages injected via messaging connector
+- Stop condition: `COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`
+
 ### Backend Integration Pattern
 
 Each backend provides:
@@ -114,6 +135,31 @@ Each backend provides:
 | `--usim-fixed-opponent-base-url` | `https://api.openai.com/v1` | API base URL |
 | `--usim-fixed-opponent-api-key-var` | `OPENAI_API_KEY` | Env var for API key |
 
+## CLI Arguments (CooperBench, `train_cooperbench_slime.py`)
+
+| Arg | Default | Description |
+|---|---|---|
+| `--trainable-role` | `agent` | Which role to train |
+| `--cooperbench-subset` | `None` | Subset: `lite`, `flash`, or all |
+| `--cooperbench-repo` | `None` | Filter by repository name |
+| `--cooperbench-partner-model` | `gpt-5-mini` | Partner agent's LLM model |
+| `--cooperbench-max-steps` | `50` | Max steps per agent |
+| `--cooperbench-redis-url` | `redis://localhost:6379` | Redis for messaging |
+| `--cooperbench-dataset-dir` | `None` | Path to CooperBench directory |
+| `--cooperbench-partial-reward` | `False` | 0.5 reward when agent passes but merge fails |
+
+## CLI Arguments (P4G, `train_p4g_slime.py`)
+
+| Arg | Default | Description |
+|---|---|---|
+| `--trainable-role` | `agent` | Which role to train (agent = persuader) |
+| `--max-turns` | `10` | Max conversation turns |
+| `--usim-fixed-opponent-model` | `None` | Fixed persuadee model via API |
+| `--p4g-corpus-path` | `persuasion_simulation/.../persuasionforgood_corpus` | Path to convokit Corpus |
+| `--p4g-dataset-dir` | `persuasion_simulation/.../persuasionforgood_train` | Path to dialogue JSONL dir |
+| `--p4g-word-limit` | `50` | Max words per response |
+| `--p4g-num-turns` | `10` | Number of conversation turns |
+
 ## Experiment Tracker (0206)
 
 ### Experiment 1: tau2-bench single model
@@ -135,18 +181,29 @@ Each backend provides:
 - **Purpose**: Test whether diverse user simulators improve agent robustness
 
 ### Experiment 3: Persuasion for Good
-- **Status**: NOT YET IMPLEMENTED
-- **Script**: `cmd/slime/qwen3_4b_instruct/0206/train_persuasion.sh`
+- **Status**: SCRIPT READY, NOT YET RUN
+- **Script**: `cmd/slime/qwen3_4b_instruct/0206/train_p4g.sh`
 - **Agent (trainable)**: Qwen3-4B-Instruct-2507 (SGLang) — plays the persuader role
-- **User sim (fixed)**: gpt-5-mini — plays the persuadee role
-- **Dataset**: Persuasion for Good corpus
-- **TODO**:
-  - Port persuasion data source from `slime/examples/persuasion/` to usim
-  - Port or adapt persona management and prompt templates
-  - Create rollout function for persuasion conversations
-  - Implement donation-based reward function
-  - Create training script
-- **Reference**: `slime/examples/persuasion/` has full persuasion implementation (trainable_agents_persuasion.py, generate_with_persuasion.py, persona_manager.py)
+- **User sim (fixed)**: gpt-5-mini via OpenAI API — plays the persuadee role
+- **Dataset**: Persuasion for Good corpus (739 train / 200 test dialogues)
+- **Reward**: `donation_amount / 2.0` normalized to [0, 1]
+- **Key args**: `--trainable-role agent --p4g-num-turns 10 --usim-fixed-opponent-model "gpt-5-mini" --p4g-word-limit 50`
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-p4g-0206`
+- **Dependencies**: `convokit` (for persona loading)
+- **Implementation**: `usim/p4g/` (prompts, persona, agent, user_simulator, reward, data_source, rollout)
+- **Training entry**: `train_p4g_slime.py`
+
+### Experiment 4: CooperBench
+- **Status**: SCRIPT READY, NOT YET RUN
+- **Script**: `cmd/slime/qwen3_4b_instruct/0206/train_cooperbench.sh`
+- **Agent (trainable)**: Qwen3-4B-Instruct-2507 (SGLang) — implements feature 1
+- **Partner (fixed)**: gpt-5-mini via CooperBench mini_swe_agent — implements feature 2
+- **Dataset**: CooperBench lite subset (from `CodeConflict/cooperbench-dataset`)
+- **Reward**: 1.0 if both features pass merged tests, 0.0 otherwise
+- **Key args**: `--trainable-role agent --cooperbench-subset lite --cooperbench-partner-model "gpt-5-mini"`
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-cooperbench-0206`
+- **Dependencies**: `cooperbench`, `mini-swe-agent[full]`, `redis`, `modal`
+- **Pre-reqs**: Redis running, Modal configured, CooperBench dataset downloaded
 
 ## Pre-run Checklist (Remote Machine)
 
@@ -181,19 +238,45 @@ Both auto-generated at runtime. No manual prep needed.
 ```
 usim/
 ├── cmd/slime/qwen3_4b_instruct/0206/   # Experiment scripts
-│   └── train_tau2.sh                     # Exp 1: single model
-├── train_usim_slime.py                   # Training entry point
+│   ├── train_tau2.sh                     # Exp 1: tau2-bench
+│   ├── train_cooperbench.sh              # Exp 4: CooperBench
+│   └── train_p4g.sh                      # Exp 3: Persuasion for Good
+├── train_usim_slime.py                   # Training entry point (tau2)
+├── train_cooperbench_slime.py            # Training entry point (CooperBench)
+├── train_p4g_slime.py                    # Training entry point (P4G)
 ├── usim/
 │   ├── core/
 │   │   ├── api_model_adapter.py          # OpenAI API adapter (fixed opponent)
 │   │   ├── model_adapter.py              # ModelAdapter protocol
-│   │   ├── orchestrator.py               # Main orchestration loop
+│   │   ├── orchestrator.py               # UserSim orchestration loop
+│   │   ├── coding_orchestrator.py        # Coding agent orchestration loop
 │   │   ├── types.py                      # Trajectory, TrainableRole, etc.
 │   │   ├── agent/                        # Agent protocol + LLMAgent
 │   │   ├── user_simulator/               # UserSim protocol + LLMUserSimulator
-│   │   ├── environment/                  # Env protocol + tau2-bench env
+│   │   ├── environment/
+│   │   │   ├── base.py                   # BaseEnvironment protocol
+│   │   │   ├── tau2/                     # tau2-bench environment
+│   │   │   │   └── environment.py        # Tau2BenchEnvironment
+│   │   │   └── cooperbench/              # CooperBench environment
+│   │   │       ├── sandbox.py            # Modal sandbox wrapper
+│   │   │       ├── environment.py        # USIM environment adapter
+│   │   │       └── messaging.py          # Redis messaging connector
 │   │   ├── prompts/                      # Prompt templates
 │   │   └── utils/                        # Message & trajectory utils
+│   ├── cooperbench/
+│   │   ├── agent.py                      # CooperBenchAgent (system/instance prompts)
+│   │   ├── data_source.py                # Task loading via discover_tasks()
+│   │   ├── partner.py                    # Partner agent runner (thread)
+│   │   ├── reward.py                     # Merge-test reward computation
+│   │   └── rollout.py                    # Rollout function for Slime
+│   ├── p4g/
+│   │   ├── prompts.py                    # Persuader/persuadee prompt templates
+│   │   ├── persona.py                    # PersonaLoader (convokit Corpus)
+│   │   ├── agent.py                      # PersuaderAgent
+│   │   ├── user_simulator.py             # PersuadeeUserSimulator
+│   │   ├── reward.py                     # Donation-based reward
+│   │   ├── data_source.py                # P4GDataSource (JSONL dialogues)
+│   │   └── rollout.py                    # P4G rollout for Slime
 │   ├── slime/
 │   │   ├── model_adapter.py              # SlimeModelAdapter (SGLang)
 │   │   ├── rollout.py                    # Rollout entry (creates adapters)
@@ -211,3 +294,4 @@ usim/
 - `spare/` — Sister project with Slime/Tinker training infrastructure. usim's patterns ported from spare.
 - `slime/` — SGLang-based RL training framework. Model configs at `slime/scripts/models/`.
 - `slime/examples/persuasion/` — Reference implementation for Persuasion for Good (to be ported to usim for Exp 3).
+- `CooperBench/` — Collaboration benchmark. Dataset: `CodeConflict/cooperbench-dataset` on HF.
