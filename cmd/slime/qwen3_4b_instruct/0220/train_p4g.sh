@@ -97,75 +97,9 @@ WANDB_ARGS=(
    --wandb-key ${WANDB_API_KEY:-""}
 )
 
-# Generate eval config
+# Eval config (template in eval_configs/, resolved at runtime)
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
-cat > "${EVAL_CONFIG_FILE}" << EOF
-# P4G Evaluation Config — Persuasion for Good test set
-# Eval against 6 persuadee models for generalizability measurement
-
-eval:
-  defaults:
-    n_samples_per_eval_prompt: 1
-    temperature: 0.7
-    top_p: 0.95
-    top_k: -1
-    max_response_len: 2048
-
-  datasets:
-    - name: p4g_test_gpt5mini
-      path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
-      custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
-      metadata_overrides:
-        usim_fixed_opponent_model: "gpt-5-mini"
-        usim_fixed_opponent_base_url: "https://api.openai.com/v1"
-        usim_fixed_opponent_api_key_var: "OPENAI_API_KEY"
-
-    - name: p4g_test_haiku
-      path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
-      custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
-      metadata_overrides:
-        usim_fixed_opponent_model: "anthropic/claude-haiku-4.5"
-        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
-        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
-
-    - name: p4g_test_gemini
-      path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
-      custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
-      metadata_overrides:
-        usim_fixed_opponent_model: "google/gemini-3-flash-preview"
-        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
-        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
-
-    - name: p4g_test_glm5
-      path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
-      custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
-      metadata_overrides:
-        usim_fixed_opponent_model: "z-ai/glm-5"
-        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
-        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
-
-    - name: p4g_test_qwen3_30b
-      path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
-      custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
-      metadata_overrides:
-        usim_fixed_opponent_model: "qwen/qwen3-30b-a3b-instruct-2507"
-        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
-        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
-
-    - name: p4g_test_deepseek
-      path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
-      custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
-      metadata_overrides:
-        usim_fixed_opponent_model: "deepseek/deepseek-v3.2"
-        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
-        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
-EOF
+envsubst < "${PROJECT_ROOT}/eval_configs/p4g_6model.yaml" > "${EVAL_CONFIG_FILE}"
 
 EVAL_ARGS=(
    --eval-interval 16
