@@ -137,12 +137,14 @@ class P4gEnvironment:
         # Compute reward from donation signals in persuadee messages
         reward = self._compute_reward()
 
-        # Terminate after num_exchanges
-        terminated = self._exchange_count >= self._num_exchanges
+        # Terminate after num_exchanges OR when donation is made
+        donated = reward > 0.0
+        terminated = self._exchange_count >= self._num_exchanges or donated
 
         info = {
             "exchange": self._exchange_count,
             "num_exchanges": self._num_exchanges,
+            "donated": donated,
         }
 
         return persuadee_text, reward, terminated, False, info
