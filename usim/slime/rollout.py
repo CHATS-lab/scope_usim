@@ -46,16 +46,23 @@ async def usim_generate_rollout(
 
             base_url = getattr(args, "usim_fixed_opponent_base_url", "https://api.openai.com/v1")
             api_key_var = getattr(args, "usim_fixed_opponent_api_key_var", "OPENAI_API_KEY")
-            api_key = os.environ.get(api_key_var)
 
             # Support model rotation: comma-separated list of models
             model_list = [m.strip() for m in fixed_usim_models.split(",") if m.strip()]
-            model_name = model_list[sample.index % len(model_list)]
+            model_idx = sample.index % len(model_list)
+            model_name = model_list[model_idx]
+
+            # Support per-model base URLs and API keys (comma-separated, maps 1:1 to models)
+            base_url_list = [u.strip() for u in base_url.split(",") if u.strip()]
+            api_key_var_list = [k.strip() for k in api_key_var.split(",") if k.strip()]
+            model_base_url = base_url_list[model_idx % len(base_url_list)]
+            model_api_key_var = api_key_var_list[model_idx % len(api_key_var_list)]
+            api_key = os.environ.get(model_api_key_var)
 
             user_model = create_openai_model_adapter(
                 model_name=model_name,
                 tokenizer=agent_model.tokenizer,
-                base_url=base_url,
+                base_url=model_base_url,
                 api_key=api_key,
             )
             logger.info(

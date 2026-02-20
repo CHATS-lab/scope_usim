@@ -130,13 +130,21 @@ class OpenAIModelAdapter:
         kwargs.pop("tools", None)
 
         try:
-            response = await self._client.chat.completions.create(
-                model=self._model_name,
-                messages=messages,
-                temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_tokens,
-            )
+            # gpt-5 series models don't accept temperature/top_p parameters
+            if self._model_name.startswith("gpt-5"):
+                response = await self._client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                )
+            else:
+                response = await self._client.chat.completions.create(
+                    model=self._model_name,
+                    messages=messages,
+                    temperature=temperature,
+                    top_p=top_p,
+                    max_tokens=max_tokens,
+                )
 
             text = response.choices[0].message.content or ""
             token_ids = self._tokenizer.encode(text, add_special_tokens=False)
