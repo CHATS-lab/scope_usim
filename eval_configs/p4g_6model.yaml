@@ -13,7 +13,7 @@ eval:
   datasets:
     - name: p4g_test_gpt5mini
       path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
       metadata_overrides:
         usim_fixed_opponent_model: "gpt-5-mini"
@@ -22,7 +22,7 @@ eval:
 
     - name: p4g_test_haiku
       path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
       metadata_overrides:
         usim_fixed_opponent_model: "anthropic/claude-haiku-4.5"
@@ -31,7 +31,7 @@ eval:
 
     - name: p4g_test_gemini
       path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
       metadata_overrides:
         usim_fixed_opponent_model: "google/gemini-3-flash-preview"
@@ -40,7 +40,7 @@ eval:
 
     - name: p4g_test_glm5
       path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
       metadata_overrides:
         usim_fixed_opponent_model: "z-ai/glm-5"
@@ -49,7 +49,7 @@ eval:
 
     - name: p4g_test_qwen3_30b
       path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
       metadata_overrides:
         usim_fixed_opponent_model: "qwen/qwen3-30b-a3b-instruct-2507"
@@ -58,7 +58,7 @@ eval:
 
     - name: p4g_test_deepseek
       path: "usim://p4g/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.p4g.rollout.p4g_generate_rollout"
       metadata_overrides:
         usim_fixed_opponent_model: "deepseek/deepseek-v3.2"

@@ -13,7 +13,7 @@ Flow per step:
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from openai import AsyncOpenAI
+import litellm
 
 from usim.core.types import Message
 from usim.p4g.prompts import build_persuadee_system_prompt, build_persuader_system_prompt
@@ -40,7 +40,7 @@ class P4gEnvironment:
         persuadee_model: str = "gpt-5-mini",
         persuadee_base_url: str = "https://api.openai.com/v1",
         persuadee_api_key: Optional[str] = None,
-        persuadee_max_tokens: int = 256,
+        persuadee_max_tokens: int = 8192,
         conversation_id: str = "",
     ):
         """Initialize P4G environment.
@@ -69,11 +69,14 @@ class P4gEnvironment:
             persuadee_persona, word_limit
         )
 
-        # Persuadee API client
-        self._persuadee_client = AsyncOpenAI(
-            base_url=persuadee_base_url, api_key=persuadee_api_key
-        )
+        # Persuadee model config for litellm
+        # OpenRouter models need openrouter/ prefix; OpenAI models work as-is
         self._persuadee_model = persuadee_model
+        if persuadee_base_url and "openrouter" in persuadee_base_url:
+            if not persuadee_model.startswith("openrouter/"):
+                self._persuadee_model = f"openrouter/{persuadee_model}"
+        self._persuadee_api_key = persuadee_api_key
+        self._persuadee_base_url = persuadee_base_url
         self._persuadee_max_tokens = persuadee_max_tokens
 
         # Internal state (reset in reset())
@@ -154,29 +157,33 @@ class P4gEnvironment:
         return None
 
     async def _call_persuadee(self) -> str:
-        """Call persuadee LLM via OpenAI API."""
+        """Call persuadee LLM via litellm."""
         try:
-            # gpt-5 models require max_completion_tokens instead of max_tokens
-            is_gpt5 = "gpt-5" in self._persuadee_model
-            token_kwarg = (
-                {"max_completion_tokens": self._persuadee_max_tokens}
-                if is_gpt5
-                else {"max_tokens": self._persuadee_max_tokens}
+            kwargs = {
+                "model": self._persuadee_model,
+                "messages": self._persuadee_messages,
+                "max_tokens": self._persuadee_max_tokens,
+                "temperature": 0.7,
+            }
+            if self._persuadee_api_key:
+                kwargs["api_key"] = self._persuadee_api_key
+
+            logger.debug(
+                f"Calling persuadee: model={self._persuadee_model}, "
+                f"messages={len(self._persuadee_messages)}, max_tokens={self._persuadee_max_tokens}"
             )
-            if is_gpt5:
-                response = await self._persuadee_client.chat.completions.create(
-                    model=self._persuadee_model,
-                    messages=self._persuadee_messages,
-                    **token_kwarg,
+
+            response = await litellm.acompletion(**kwargs)
+            content = response.choices[0].message.content or ""
+
+            if not content.strip():
+                logger.warning(
+                    f"Persuadee returned empty response: model={self._persuadee_model}, "
+                    f"finish_reason={response.choices[0].finish_reason}, "
+                    f"usage={response.usage}"
                 )
-            else:
-                response = await self._persuadee_client.chat.completions.create(
-                    model=self._persuadee_model,
-                    messages=self._persuadee_messages,
-                    temperature=0.7,
-                    **token_kwarg,
-                )
-            return response.choices[0].message.content or ""
+
+            return content
         except Exception as e:
             logger.error(f"Persuadee API call failed ({self._persuadee_model}): {e}")
             return "(no response)"

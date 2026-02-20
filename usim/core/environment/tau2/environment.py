@@ -151,14 +151,22 @@ class Tau2Environment:
     ):
         self._domain = domain
         self._task_id = task_id
+
+        # litellm needs provider prefix for non-OpenAI models
+        # OpenRouter models: openrouter/google/gemini-3-flash-preview
+        # OpenAI models: gpt-5-mini (litellm recognizes natively)
+        litellm_model = user_model
+        if user_model and "openrouter" in (user_base_url or ""):
+            if not user_model.startswith("openrouter/"):
+                litellm_model = f"openrouter/{user_model}"
+
         self._env = AgentGymEnv(
             domain=domain,
             task_id=task_id,
             max_steps=max_turns,
             solo_mode=False,
-            user_llm=user_model,
+            user_llm=litellm_model,
             user_llm_args={
-                "base_url": user_base_url,
                 "api_key": user_api_key,
             },
         )

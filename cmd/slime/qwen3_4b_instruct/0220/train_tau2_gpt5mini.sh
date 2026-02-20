@@ -104,6 +104,7 @@ envsubst < "${PROJECT_ROOT}/eval_configs/tau2_retail_6model.yaml" > "${EVAL_CONF
 
 EVAL_ARGS=(
    --eval-interval 16
+   --skip-eval-before-train
    --eval-config "${EVAL_CONFIG_FILE}"
 )
 

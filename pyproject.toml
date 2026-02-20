@@ -28,6 +28,7 @@ dependencies = [
   "numpy>=1.24.0",
   "tqdm>=4.65.0",
   "weave",
+  "litellm>=1.65.0",
 ]
 
 [project.optional-dependencies]

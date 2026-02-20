@@ -13,72 +13,72 @@ eval:
   datasets:
     - name: tau2_retail_test_haiku
       path: "usim://tau2/retail/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
       metadata_overrides:
         domain: retail
         task_split: test
-        max_tasks: 50
+        max_tasks: 8
         usim_fixed_opponent_model: "anthropic/claude-haiku-4.5"
         usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
         usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
 
     - name: tau2_retail_test_gpt5mini
       path: "usim://tau2/retail/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
       metadata_overrides:
         domain: retail
         task_split: test
-        max_tasks: 50
+        max_tasks: 8
         usim_fixed_opponent_model: "gpt-5-mini"
         usim_fixed_opponent_base_url: "https://api.openai.com/v1"
         usim_fixed_opponent_api_key_var: "OPENAI_API_KEY"
 
     - name: tau2_retail_test_gemini
       path: "usim://tau2/retail/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
       metadata_overrides:
         domain: retail
         task_split: test
-        max_tasks: 50
+        max_tasks: 8
         usim_fixed_opponent_model: "google/gemini-3-flash-preview"
         usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
         usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
 
     - name: tau2_retail_test_glm5
       path: "usim://tau2/retail/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
       metadata_overrides:
         domain: retail
         task_split: test
-        max_tasks: 50
+        max_tasks: 8
         usim_fixed_opponent_model: "z-ai/glm-5"
         usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
         usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
 
     - name: tau2_retail_test_qwen3_30b
       path: "usim://tau2/retail/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
       metadata_overrides:
         domain: retail
         task_split: test
-        max_tasks: 50
+        max_tasks: 8
         usim_fixed_opponent_model: "qwen/qwen3-30b-a3b-instruct-2507"
         usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
         usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
 
     - name: tau2_retail_test_deepseek
       path: "usim://tau2/retail/test"
-      n_samples_per_eval_prompt: 1
+      n_samples_per_eval_prompt: 4
       custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
       metadata_overrides:
         domain: retail
         task_split: test
-        max_tasks: 50
+        max_tasks: 8
         usim_fixed_opponent_model: "deepseek/deepseek-v3.2"
         usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
         usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"

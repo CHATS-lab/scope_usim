@@ -1,25 +1,30 @@
-"""OpenAI-compatible API model adapter for fixed opponent models.
+"""LiteLLM-based model adapter for fixed opponent models.
 
-This adapter wraps an AsyncOpenAI client for generation while using a local
-tokenizer for token tracking. Used when the user simulator (opponent) is a
-fixed API model like gpt-5-mini while the agent is the trainable SGLang model.
+This adapter wraps litellm for generation while using a local tokenizer for
+token tracking. Used when the user simulator (opponent) is a fixed API model
+like gpt-5-mini while the agent is the trainable SGLang model.
 
 Since the opponent's tokens are never trained (loss_mask=0), logprobs are
 set to 0.0 — only the local tokenizer is needed for token-in-token-out tracking.
+
+litellm handles provider-specific quirks (max_tokens vs max_completion_tokens,
+OpenRouter routing, etc.) automatically.
 """
 
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
+import litellm
+
 logger = logging.getLogger(__name__)
 
 
 class OpenAIModelAdapter:
-    """ModelAdapter using OpenAI-compatible API for generation.
+    """ModelAdapter using litellm for generation.
 
     Uses a shared local tokenizer for template application / token tracking,
-    and an AsyncOpenAI client for actual text generation.
+    and litellm for actual text generation across providers.
     """
 
     def __init__(
@@ -35,18 +40,21 @@ class OpenAIModelAdapter:
         Args:
             model_name: Model name for API calls (e.g., "gpt-5-mini")
             tokenizer: Local tokenizer for token tracking (shared with trainable model)
-            base_url: OpenAI-compatible API base URL
-            api_key: API key (reads from OPENAI_API_KEY env var if None)
+            base_url: API base URL
+            api_key: API key
             default_sampling_params: Default sampling parameters
         """
-        try:
-            from openai import AsyncOpenAI
-        except ImportError:
-            raise ImportError("openai package required for OpenAIModelAdapter")
-
+        # litellm needs provider prefix for non-OpenAI models
+        # OpenRouter: openrouter/google/gemini-3-flash-preview
+        # OpenAI: gpt-5-mini (litellm recognizes natively)
         self._model_name = model_name
+        if base_url and "openrouter" in base_url:
+            if not model_name.startswith("openrouter/"):
+                self._model_name = f"openrouter/{model_name}"
+
         self._tokenizer = tokenizer
-        self._client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+        self._api_key = api_key
+        self._base_url = base_url
         self._default_params = default_sampling_params or {}
 
     @property
@@ -61,17 +69,7 @@ class OpenAIModelAdapter:
         add_generation_prompt: bool = True,
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> List[int]:
-        """Apply chat template using local tokenizer.
-
-        Args:
-            messages: List of message dicts
-            tokenize: Whether to tokenize the output
-            add_generation_prompt: Whether to add generation prompt
-            tools: Optional tool schemas
-
-        Returns:
-            List of token IDs when tokenize=True
-        """
+        """Apply chat template using local tokenizer."""
         kwargs = {
             "tokenize": tokenize,
             "add_generation_prompt": add_generation_prompt,
@@ -110,47 +108,25 @@ class OpenAIModelAdapter:
         max_tokens: int = 512,
         **kwargs: Any,
     ) -> List[Dict[str, Any]]:
-        """Generate responses using OpenAI-compatible API.
+        """Generate responses using litellm.
 
         Logprobs are set to 0.0 since this is a fixed opponent model
         (loss_mask=0, not trained).
-
-        Args:
-            messages: List of message dicts
-            input_ids: Ignored (API doesn't accept raw token IDs)
-            temperature: Sampling temperature
-            top_p: Nucleus sampling parameter
-            max_tokens: Maximum tokens to generate
-            **kwargs: Additional parameters
-
-        Returns:
-            List of generation results
         """
-        # Strip tool-related kwargs that the API handles differently
         kwargs.pop("tools", None)
 
         try:
-            # gpt-5 models require max_completion_tokens instead of max_tokens
-            is_gpt5 = "gpt-5" in self._model_name
-            token_kwarg = (
-                {"max_completion_tokens": max_tokens}
-                if is_gpt5
-                else {"max_tokens": max_tokens}
-            )
-            if is_gpt5:
-                response = await self._client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    **token_kwarg,
-                )
-            else:
-                response = await self._client.chat.completions.create(
-                    model=self._model_name,
-                    messages=messages,
-                    temperature=temperature,
-                    top_p=top_p,
-                    **token_kwarg,
-                )
+            call_kwargs = {
+                "model": self._model_name,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": top_p,
+            }
+            if self._api_key:
+                call_kwargs["api_key"] = self._api_key
+
+            response = await litellm.acompletion(**call_kwargs)
 
             text = response.choices[0].message.content or ""
             token_ids = self._tokenizer.encode(text, add_special_tokens=False)
@@ -179,17 +155,7 @@ def create_openai_model_adapter(
     base_url: str = "https://api.openai.com/v1",
     api_key: Optional[str] = None,
 ) -> OpenAIModelAdapter:
-    """Factory function to create an OpenAI-compatible model adapter.
-
-    Args:
-        model_name: Model name for API calls
-        tokenizer: Local tokenizer (shared with trainable model)
-        base_url: API base URL
-        api_key: API key
-
-    Returns:
-        Configured OpenAIModelAdapter
-    """
+    """Factory function to create an OpenAI-compatible model adapter."""
     return OpenAIModelAdapter(
         model_name=model_name,
         tokenizer=tokenizer,
