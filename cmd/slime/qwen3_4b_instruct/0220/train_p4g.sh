@@ -47,7 +47,7 @@ CKPT_ARGS=(
 ROLLOUT_ARGS=(
    --data-source-path usim.p4g.data_source.get_p4g_data_source
    --rollout-function-path usim.p4g.rollout.p4g_generate_rollout
-   --num-rollout 739
+   --num-rollout 1000
    --rollout-batch-size 16
    --n-samples-per-prompt 8
    --rollout-max-response-len 32768
@@ -73,9 +73,9 @@ PERF_ARGS=(
    --tensor-model-parallel-size 1
    --sequence-parallel
    --pipeline-model-parallel-size 1
-   --context-parallel-size 1
+   --context-parallel-size 2
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 2048
+   --max-tokens-per-gpu 8192
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
