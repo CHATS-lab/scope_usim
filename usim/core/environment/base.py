@@ -1,64 +1,71 @@
-"""Base protocol for environment implementations."""
+"""Base protocol for Gym-based environment implementations.
 
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+Environments wrap domain-specific logic (user simulation, tool execution,
+observation conversion, response parsing) behind a standard async Gym interface.
+The orchestrator is environment-agnostic — it only calls reset/step/parse.
+"""
 
-from usim.core.types import Message, ToolCall
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 
 @runtime_checkable
 class BaseEnvironment(Protocol):
-    """Protocol for environment implementations.
+    """Protocol for Gym-based environments.
 
-    An environment handles tool execution and maintains state for the
-    conversation. It processes tool calls from agents and users,
-    returning the results.
+    Each environment handles:
+    - User simulation and tool execution (inside step)
+    - Observation → OpenAI message conversion (inside reset)
+    - Agent response parsing (parse_response)
+    - Optional prompt postprocessing (prompt_postprocess_fn)
+
+    Implementations:
+    - tau2-bench: AgentGymEnv wrapper with tool call parsing
+    - Persuasion for Good: text-only conversation (no tools)
     """
 
-    def get_tools(self) -> List[Dict[str, Any]]:
-        """Get available tools as OpenAI-format schemas.
+    async def reset(self) -> Tuple[List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Dict[str, Any]]:
+        """Reset environment and return initial state.
 
         Returns:
-            List of tool schemas in OpenAI function format
+            Tuple of:
+            - initial_messages: OpenAI-style conversation messages (system + observation)
+            - tools_schema: Tool schemas in OpenAI format, or None if no tools
+            - task_info: Task metadata dict (id, domain, etc.)
         """
         ...
 
-    def execute_tool(self, tool_call: ToolCall) -> Message:
-        """Execute a tool call and return the result.
+    async def step(self, action: str) -> Tuple[str, float, bool, bool, Dict[str, Any]]:
+        """Step environment with agent action.
+
+        The environment handles user simulation and tool execution internally.
 
         Args:
-            tool_call: The tool call to execute
+            action: Agent's action (plain text or JSON-encoded tool call)
 
         Returns:
-            ToolMessage with the execution result
+            Tuple of (observation, reward, terminated, truncated, info)
         """
         ...
 
-    async def execute_tool_async(self, tool_call: ToolCall) -> Message:
-        """Execute a tool call asynchronously.
+    def parse_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """Parse agent response into structured format.
+
+        Uses internally stored tools_schema from reset().
 
         Args:
-            tool_call: The tool call to execute
+            response_text: Raw LLM response text
 
         Returns:
-            ToolMessage with the execution result
+            {"normal_text": str, "calls": list} or None on failure
         """
         ...
 
-    def reset(self, **kwargs: Any) -> Dict[str, Any]:
-        """Reset the environment to initial state.
+    @property
+    def prompt_postprocess_fn(self) -> Optional[Callable[[str], str]]:
+        """Optional function to transform prompt text after chat template.
 
-        Args:
-            **kwargs: Environment-specific reset parameters
-
-        Returns:
-            Info dict with environment state
-        """
-        ...
-
-    def get_info(self) -> Dict[str, Any]:
-        """Get current environment information.
-
-        Returns:
-            Dict with environment state and metadata
+        Environment-specific text transformation applied to prompts before
+        tokenization (e.g., tau2-bench replaces multi-tool instruction with
+        single-tool instruction for Qwen3).
         """
         ...

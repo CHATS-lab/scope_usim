@@ -48,7 +48,7 @@ ROLLOUT_ARGS=(
    --rollout-function-path usim.slime.rollout.usim_generate_rollout
    --num-rollout 1000
    --rollout-batch-size 16
-   --n-samples-per-prompt 1
+   --n-samples-per-prompt 8
    --rollout-max-response-len 16384
    --rollout-temperature 0.7
    --global-batch-size 64
@@ -79,8 +79,8 @@ PERF_ARGS=(
 
 GRPO_ARGS=(
    --advantage-estimator grpo
-   --disable-grpo-std-normalization
-   --disable-rewards-normalization
+   --grpo-std-normalization
+   --rewards-normalization
    --use-kl-loss
    --kl-loss-coef 0.01
    --kl-loss-type low_var_kl
@@ -100,7 +100,7 @@ WANDB_ARGS=(
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
 cat > "${EVAL_CONFIG_FILE}" << EOF
 # USIM Evaluation Config — tau2-bench retail test set
-# Fixed opponent: gpt-5-mini
+# Eval against 6 opponent models for generalizability measurement
 
 eval:
   defaults:
@@ -111,7 +111,7 @@ eval:
     max_response_len: 16384
 
   datasets:
-    - name: tau2_retail_test
+    - name: tau2_retail_test_haiku
       path: "usim://tau2/retail/test"
       n_samples_per_eval_prompt: 1
       custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
@@ -119,10 +119,73 @@ eval:
         domain: retail
         task_split: test
         max_tasks: 50
+        usim_fixed_opponent_model: "anthropic/claude-haiku-4.5"
+        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
+        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
+
+    - name: tau2_retail_test_gpt5mini
+      path: "usim://tau2/retail/test"
+      n_samples_per_eval_prompt: 1
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 50
+        usim_fixed_opponent_model: "gpt-5-mini"
+        usim_fixed_opponent_base_url: "https://api.openai.com/v1"
+        usim_fixed_opponent_api_key_var: "OPENAI_API_KEY"
+
+    - name: tau2_retail_test_gemini
+      path: "usim://tau2/retail/test"
+      n_samples_per_eval_prompt: 1
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 50
+        usim_fixed_opponent_model: "google/gemini-3-flash-preview"
+        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
+        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
+
+    - name: tau2_retail_test_glm5
+      path: "usim://tau2/retail/test"
+      n_samples_per_eval_prompt: 1
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 50
+        usim_fixed_opponent_model: "z-ai/glm-5"
+        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
+        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
+
+    - name: tau2_retail_test_qwen3_30b
+      path: "usim://tau2/retail/test"
+      n_samples_per_eval_prompt: 1
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 50
+        usim_fixed_opponent_model: "qwen/qwen3-30b-a3b-instruct-2507"
+        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
+        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
+
+    - name: tau2_retail_test_deepseek
+      path: "usim://tau2/retail/test"
+      n_samples_per_eval_prompt: 1
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 50
+        usim_fixed_opponent_model: "deepseek/deepseek-v3.2"
+        usim_fixed_opponent_base_url: "https://openrouter.ai/api/v1"
+        usim_fixed_opponent_api_key_var: "OPENROUTER_API_KEY"
 EOF
 
 EVAL_ARGS=(
-   --eval-interval 32
+   --eval-interval 16
    --eval-config "${EVAL_CONFIG_FILE}"
 )
 

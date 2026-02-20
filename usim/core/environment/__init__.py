@@ -1,6 +1,5 @@
-"""Environment implementations for tool execution."""
+"""Environment implementations for USIM."""
 
 from usim.core.environment.base import BaseEnvironment
-from usim.core.environment.tau2.environment import Tau2BenchEnvironment
 
-__all__ = ["BaseEnvironment", "Tau2BenchEnvironment"]
+__all__ = ["BaseEnvironment"]

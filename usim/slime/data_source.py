@@ -82,6 +82,7 @@ class Tau2DataSource(DataSource):
                 "domain": self.domain,
                 "initial_state": task.initial_state,
                 "evaluation": task.evaluation,
+                "tau2_task": task,
             },
         )
 

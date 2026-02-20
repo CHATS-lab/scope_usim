@@ -36,6 +36,8 @@ isort --profile black usim/ tests/
 ```
 Line length is 100 characters. Target Python is 3.10+.
 
+**Import convention:** Always place imports at the top of the file. Do not use lazy imports inside functions unless absolutely necessary (e.g., circular import resolution). Backend-specific modules (`usim/slime/`, `usim/tinker/`) may import their backend dependencies (`slime`, `tau2`, `sglang`) at the top level since they are only loaded when the backend is installed.
+
 ### Training (Slime)
 ```bash
 # 0206 experiment: Qwen3-4B-Instruct + gpt-5-mini user sim on tau2-bench retail
@@ -64,38 +66,43 @@ The `usim/core/` package defines all interfaces as `@runtime_checkable` Protocol
 
 Environment implementations go under `usim/core/environment/{env_name}/` alongside the protocol at `usim/core/environment/base.py`. Each environment package has its own `__init__.py`, sandbox wrapper, and any connectors.
 
+### Environment Protocol (`core/environment/base.py`)
+
+All environments implement `BaseEnvironment` — an async Gym-based protocol:
+- `async reset()` → `(initial_messages, tools_schema, task_info)`
+- `async step(action)` → `(obs, reward, terminated, truncated, info)`
+- `parse_response(text)` → `{"normal_text", "calls"}` or None
+- `prompt_postprocess_fn` → optional text transform (e.g. tool instruction reformulation)
+
+Env-specific logic (observation conversion, tool parsing, prompt postprocessing) lives in the environment implementation, NOT in the orchestrator or rollout.
+
 ### Orchestration Flow (`core/orchestrator.py`)
 
-`UserSimOrchestrator` calls `model.generate_async()` directly — agent/user_sim only handle prompt building and response parsing.
+`UserSimOrchestrator.rollout(env, generate_fn, sampling_params)` runs a complete Gym rollout:
 
-Flow:
-1. `agent.build_messages(state)` → `agent_model.generate_async(messages, input_ids=all_tokens)` → `agent.parse_response(text, state)`
-2. If tool calls → Environment executes → results added
-3. `user_simulator.build_messages(state)` → `user_model.generate_async(messages)` → `user_simulator.parse_response(text, state)`
-4. Repeat until stop signal or `max_turns`
+1. `env.reset()` → get initial messages, tools schema, task info
+2. Tokenize initial prompt (with `env.prompt_postprocess_fn`)
+3. Loop:
+   - Generate via `generate_fn(input_ids, sampling_params)` — TITO with `input_ids`
+   - Parse via `env.parse_response(text)` — tool calls or plain text
+   - Track assistant tokens from model output DIRECTLY (`token_ids`, `logprobs`)
+   - Step: `env.step(action)` → `(obs, reward, terminated, truncated, info)`
+   - Track env tokens via `_get_token_delta` (`loss_mask=0`, `logprobs=0.0`)
+4. Return Trajectory
 
 **Token Tracking (spare convention):**
-- `all_tokens`: ALL tokens (prompt + responses)
-- `all_masks` / `all_logprobs`: response tokens only (**excludes prompt**)
-- Invariant: `len(loss_mask) == len(rollout_log_probs)`
-- Invariant: `len(tokens) >= len(loss_mask)`
-- `base_offset = len(tokens) - len(loss_mask)` = prompt length
+- `all_tokens`: starts with prompt, grows each turn
+- `all_masks`: 1 for assistant, 0 for env — `len(all_masks) == len(all_logprobs)`
+- `all_logprobs`: model logprobs for assistant, 0.0 for env
+- `base_offset = len(all_tokens) - len(all_masks)` = prompt length
+- Assistant tokens: `token_ids` and `logprobs` from model output (not re-tokenized)
+- This is critical for GRPO: `importance_ratio = exp(current_logprob - rollout_logprob)`
 
-### Fixed Opponent via API (`core/api_model_adapter.py`)
+**generate_fn interface:** `async (input_ids: List[int], sampling_params: Dict) -> {"text", "token_ids", "logprobs", "meta_info"}`
 
-When `--usim-fixed-opponent-model` is set, the rollout creates:
-- `agent_model` = `SlimeModelAdapter` (SGLang, trainable)
-- `user_model` = `OpenAIModelAdapter` (API, fixed)
+### Fixed Opponent via Model Rotation
 
-The API adapter shares the SGLang model's tokenizer for token-in-token-out tracking. Model rotation is supported: pass comma-separated models and each sample picks `models[sample.index % len(models)]`.
-
-### State Management
-
-`AgentState` / `UserState` use immutable updates — `add_message()` returns new state.
-
-### Role Flipping in User Simulator
-
-`LLMUserSimulator.build_messages()` flips roles so the LLM generates as "assistant" internally, then `parse_response()` converts output to "user" role.
+When `--usim-fixed-opponent-model` is set, the user simulator is passed to the Gym environment (e.g. `AgentGymEnv(user_llm=model_name, ...)`). Model rotation is supported: pass comma-separated models and each sample picks `models[sample.index % len(models)]`. Per-model base URLs and API keys are also comma-separated.
 
 ### Coding Orchestrator (`core/coding_orchestrator.py`)
 
@@ -248,15 +255,15 @@ usim/
 │   ├── core/
 │   │   ├── api_model_adapter.py          # OpenAI API adapter (fixed opponent)
 │   │   ├── model_adapter.py              # ModelAdapter protocol
-│   │   ├── orchestrator.py               # UserSim orchestration loop
+│   │   ├── orchestrator.py               # Gym-based rollout loop (env-agnostic)
 │   │   ├── coding_orchestrator.py        # Coding agent orchestration loop
 │   │   ├── types.py                      # Trajectory, TrainableRole, etc.
 │   │   ├── agent/                        # Agent protocol + LLMAgent
 │   │   ├── user_simulator/               # UserSim protocol + LLMUserSimulator
 │   │   ├── environment/
-│   │   │   ├── base.py                   # BaseEnvironment protocol
+│   │   │   ├── base.py                   # BaseEnvironment protocol (async Gym)
 │   │   │   ├── tau2/                     # tau2-bench environment
-│   │   │   │   └── environment.py        # Tau2BenchEnvironment
+│   │   │   │   └── environment.py        # Tau2Environment (wraps AgentGymEnv)
 │   │   │   └── cooperbench/              # CooperBench environment
 │   │   │       ├── sandbox.py            # Modal sandbox wrapper
 │   │   │       ├── environment.py        # USIM environment adapter
@@ -279,7 +286,7 @@ usim/
 │   │   └── rollout.py                    # P4G rollout for Slime
 │   ├── slime/
 │   │   ├── model_adapter.py              # SlimeModelAdapter (SGLang)
-│   │   ├── rollout.py                    # Rollout entry (creates adapters)
+│   │   ├── rollout.py                    # Slime rollout glue (env + generate_fn → orchestrator)
 │   │   ├── trajectory_converter.py       # Trajectory → Slime Sample
 │   │   └── data_source.py               # Tau2DataSource
 │   └── tinker/
