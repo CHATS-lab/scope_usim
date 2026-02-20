@@ -60,8 +60,8 @@ P4G_ARGS=(
    --trainable-role agent
    --max-turns 10
    --usim-fixed-opponent-model "gpt-5-mini"
-   --p4g-corpus-path "${PROJECT_ROOT}/persuasion_simulation/src/datasets/donation/persuasionforgood_corpus"
-   --p4g-dataset-dir "${PROJECT_ROOT}/persuasion_simulation/src/datasets/donation/persuasionforgood_train"
+   --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus"
+   --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
    --p4g-word-limit 50
    --p4g-num-turns 10
 )

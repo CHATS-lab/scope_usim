@@ -162,8 +162,8 @@ Each backend provides:
 | `--trainable-role` | `agent` | Which role to train (agent = persuader) |
 | `--max-turns` | `10` | Max conversation turns |
 | `--usim-fixed-opponent-model` | `None` | Fixed persuadee model via API |
-| `--p4g-corpus-path` | `persuasion_simulation/.../persuasionforgood_corpus` | Path to convokit Corpus |
-| `--p4g-dataset-dir` | `persuasion_simulation/.../persuasionforgood_train` | Path to dialogue JSONL dir |
+| `--p4g-corpus-path` | `data/p4g/corpus` | Path to convokit Corpus |
+| `--p4g-dataset-dir` | `data/p4g/train` | Path to dialogue JSONL dir |
 | `--p4g-word-limit` | `50` | Max words per response |
 | `--p4g-num-turns` | `10` | Number of conversation turns |
 

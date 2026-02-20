@@ -206,14 +206,14 @@ def add_p4g_arguments(parser: Any) -> None:
     group.add_argument(
         "--p4g-corpus-path",
         type=str,
-        default="persuasion_simulation/src/datasets/donation/persuasionforgood_corpus",
+        default="data/p4g/corpus",
         help="Path to convokit Corpus for persona loading",
     )
 
     group.add_argument(
         "--p4g-dataset-dir",
         type=str,
-        default="persuasion_simulation/src/datasets/donation/persuasionforgood_train",
+        default="data/p4g/train",
         help="Path to directory with dialogue JSONL files",
     )
 
