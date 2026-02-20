@@ -81,7 +81,7 @@ def main() -> None:
     args.rollout_function_path = (
         args.rollout_function_path or "usim.p4g.rollout.p4g_generate_rollout"
     )
-    args.data_source_path = args.data_source_path or "usim.p4g.data_source.get_p4g_samples"
+    args.data_source_path = args.data_source_path or "usim.p4g.data_source.get_p4g_data_source"
 
     # Override max_turns with p4g_num_turns if set
     if hasattr(args, "p4g_num_turns"):
