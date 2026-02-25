@@ -65,6 +65,8 @@ def add_p4g_train_arguments(parser: argparse.ArgumentParser) -> None:
 
     add_p4g_arguments(parser)
 
+    return parser
+
 
 def main() -> None:
     """Main entry point for P4G training with Slime."""

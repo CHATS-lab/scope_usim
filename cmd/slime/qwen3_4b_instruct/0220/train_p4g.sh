@@ -14,6 +14,7 @@ sleep 3
 set -ex
 
 export PYTHONBUFFERED=1
+export WEAVE_PRINT_CALL_LINK=false
 
 # Detect NVLink
 NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
@@ -44,14 +45,14 @@ CKPT_ARGS=(
 )
 
 ROLLOUT_ARGS=(
-   --data-source-path usim.p4g.data_source.get_p4g_samples
+   --data-source-path usim.p4g.data_source.get_p4g_data_source
    --rollout-function-path usim.p4g.rollout.p4g_generate_rollout
    --num-rollout 739
    --rollout-batch-size 16
    --n-samples-per-prompt 8
-   --rollout-max-response-len 2048
+   --rollout-max-response-len 32768
    --rollout-temperature 0.7
-   --global-batch-size 64
+   --global-batch-size 128
    --balance-data
 )
 
@@ -80,8 +81,8 @@ PERF_ARGS=(
 
 GRPO_ARGS=(
    --advantage-estimator grpo
-   --grpo-std-normalization
-   --rewards-normalization
+   --disable-grpo-std-normalization
+   --disable-rewards-normalization
    --use-kl-loss
    --kl-loss-coef 0.01
    --kl-loss-type low_var_kl
@@ -93,6 +94,7 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project usim
+   --wandb-team simon011130
    --wandb-group qwen3-4B-Instruct-2507-p4g-0220
    --wandb-key ${WANDB_API_KEY:-""}
 )
@@ -143,8 +145,8 @@ ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
    -- python3 -m train_p4g_slime \
    --actor-num-nodes 1 \
-   --actor-num-gpus-per-node 8 \
-   --colocate \
+   --actor-num-gpus-per-node 2 \
+   --rollout-num-gpus 6 \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \

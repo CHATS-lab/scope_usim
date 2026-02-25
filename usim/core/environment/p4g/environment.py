@@ -156,19 +156,25 @@ class P4gEnvironment:
     async def _call_persuadee(self) -> str:
         """Call persuadee LLM via OpenAI API."""
         try:
-            # gpt-5 models don't accept temperature/top_p
-            if self._persuadee_model.startswith("gpt-5"):
+            # gpt-5 models require max_completion_tokens instead of max_tokens
+            is_gpt5 = "gpt-5" in self._persuadee_model
+            token_kwarg = (
+                {"max_completion_tokens": self._persuadee_max_tokens}
+                if is_gpt5
+                else {"max_tokens": self._persuadee_max_tokens}
+            )
+            if is_gpt5:
                 response = await self._persuadee_client.chat.completions.create(
                     model=self._persuadee_model,
                     messages=self._persuadee_messages,
-                    max_tokens=self._persuadee_max_tokens,
+                    **token_kwarg,
                 )
             else:
                 response = await self._persuadee_client.chat.completions.create(
                     model=self._persuadee_model,
                     messages=self._persuadee_messages,
                     temperature=0.7,
-                    max_tokens=self._persuadee_max_tokens,
+                    **token_kwarg,
                 )
             return response.choices[0].message.content or ""
         except Exception as e:

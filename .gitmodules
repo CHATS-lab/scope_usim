@@ -4,3 +4,6 @@
 [submodule "tinker-cookbook"]
 	path = tinker-cookbook
 	url = https://github.com/thinking-machines-lab/tinker-cookbook.git
+[submodule "tau2-bench"]
+	path = tau2-bench
+	url = https://github.com/sierra-research/tau2-bench.git

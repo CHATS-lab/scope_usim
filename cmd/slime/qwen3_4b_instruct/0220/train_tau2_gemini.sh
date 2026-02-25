@@ -14,6 +14,7 @@ sleep 3
 set -ex
 
 export PYTHONBUFFERED=1
+export WEAVE_PRINT_CALL_LINK=false
 
 # Detect NVLink
 NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
@@ -51,7 +52,7 @@ ROLLOUT_ARGS=(
    --n-samples-per-prompt 8
    --rollout-max-response-len 16384
    --rollout-temperature 0.7
-   --global-batch-size 64
+   --global-batch-size 128
    --balance-data
 )
 
@@ -73,7 +74,7 @@ PERF_ARGS=(
    --pipeline-model-parallel-size 1
    --context-parallel-size 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 2048
+   --max-tokens-per-gpu 8192
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
@@ -81,8 +82,8 @@ PERF_ARGS=(
 
 GRPO_ARGS=(
    --advantage-estimator grpo
-   --grpo-std-normalization
-   --rewards-normalization
+   --disable-grpo-std-normalization
+   --disable-rewards-normalization
    --use-kl-loss
    --kl-loss-coef 0.01
    --kl-loss-type low_var_kl
@@ -94,6 +95,7 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project usim
+   --wandb-team simon011130
    --wandb-group qwen3-4B-Instruct-2507-tau2-gemini-0220
    --wandb-key ${WANDB_API_KEY:-""}
 )

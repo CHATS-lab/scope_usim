@@ -1,20 +1,22 @@
 """Slime rollout entry point for Persuasion for Good training.
 
-Thin glue layer: creates the P4G environment, sglang generate function,
-and calls the generic orchestrator. Converts the resulting Trajectory
-to Slime's Sample format.
-
-All P4G-specific logic (persuadee API calls, persona loading, reward
-computation) lives in usim.core.environment.p4g.
+Batch-level rollout function following spare's pattern:
+1. Gets samples from data_source
+2. Runs per-sample async rollouts via asyncio
+3. Returns RolloutFnTrainOutput with grouped samples
 """
 
+import asyncio
 import logging
 import os
-from typing import Any, Dict, List
+from argparse import Namespace
+from typing import Any, Callable, Dict, List
 
-from slime.data.types import Sample
+import weave
+from slime.rollout.base_types import RolloutFnEvalOutput, RolloutFnTrainOutput
 from slime.utils.http_utils import post
 from slime.utils.processing_utils import load_tokenizer
+from slime.utils.types import Sample
 
 from usim.core.environment.p4g import P4gEnvironment
 from usim.core.orchestrator import UserSimOrchestrator
@@ -25,26 +27,18 @@ from usim.slime.trajectory_converter import trajectory_to_slime_sample
 
 logger = logging.getLogger(__name__)
 
-# Module-level cache for PersonaLoader (loaded once per worker process)
 _persona_loader_cache: Dict[str, PersonaLoader] = {}
 
 
 def _get_persona_loader(corpus_path: str) -> PersonaLoader:
-    """Get or create a cached PersonaLoader."""
     if corpus_path not in _persona_loader_cache:
         _persona_loader_cache[corpus_path] = PersonaLoader(corpus_path)
     return _persona_loader_cache[corpus_path]
 
 
 def _get_persuadee_config(args: Any, sample: Any) -> tuple:
-    """Get persuadee model configuration from metadata overrides or CLI args.
-
-    Returns:
-        (model_name, base_url, api_key) tuple
-    """
     metadata = getattr(sample, "metadata", {}) or {}
 
-    # Check metadata overrides first (for eval)
     fixed_model = metadata.get("usim_fixed_opponent_model")
     base_url = metadata.get(
         "usim_fixed_opponent_base_url",
@@ -55,56 +49,39 @@ def _get_persuadee_config(args: Any, sample: Any) -> tuple:
         getattr(args, "usim_fixed_opponent_api_key_var", "OPENAI_API_KEY"),
     )
 
-    # Fall back to CLI args for training
     if not fixed_model:
         fixed_model = getattr(args, "usim_fixed_opponent_model", None)
 
     if not fixed_model:
         return None, base_url, None
 
-    # Model rotation: comma-separated list
     model_list = [m.strip() for m in fixed_model.split(",") if m.strip()]
     model_idx = sample.index % len(model_list)
     model_name = model_list[model_idx]
 
-    # Per-model base URL and API key (comma-separated, maps 1:1)
     base_url_list = [u.strip() for u in base_url.split(",") if u.strip()]
     api_key_var_list = [k.strip() for k in api_key_var.split(",") if k.strip()]
     model_base_url = base_url_list[model_idx % len(base_url_list)]
     model_api_key_var = api_key_var_list[model_idx % len(api_key_var_list)]
     api_key = os.environ.get(model_api_key_var)
 
-    logger.info(
-        f"P4G persuadee: {model_name} (sample {sample.index}, "
-        f"{len(model_list)} model(s) in rotation)"
-    )
     return model_name, model_base_url, api_key
 
 
-async def p4g_generate_rollout(
+async def _p4g_generate_single(
     args: Any,
     sample: Any,
     sampling_params: Dict[str, Any],
-) -> List[Any]:
-    """Generate a P4G rollout for Slime training.
-
-    Args:
-        args: Slime training arguments namespace
-        sample: Slime Sample with P4G task metadata
-        sampling_params: Sampling parameters for generation
-
-    Returns:
-        List of Slime Sample objects with trajectories
-    """
+    **kwargs: Any,
+) -> Sample:
+    """Per-sample async generate function for P4G."""
     try:
         metadata = getattr(sample, "metadata", {}) or {}
 
-        # --- P4G config ---
         num_turns = getattr(args, "p4g_num_turns", 10)
         word_limit = getattr(args, "p4g_word_limit", 50)
         num_exchanges = num_turns // 2
 
-        # --- Load personas ---
         corpus_path = metadata.get(
             "corpus_path", getattr(args, "p4g_corpus_path", "")
         )
@@ -115,7 +92,6 @@ async def p4g_generate_rollout(
         persuader_persona = persona_loader.get_persona_text(persuader_speaker_id)
         persuadee_persona = persona_loader.get_persona_text(persuadee_speaker_id)
 
-        # --- Persuadee model config ---
         persuadee_model, persuadee_base_url, persuadee_api_key = (
             _get_persuadee_config(args, sample)
         )
@@ -124,7 +100,6 @@ async def p4g_generate_rollout(
                 "P4G requires --usim-fixed-opponent-model for the persuadee"
             )
 
-        # --- Create environment ---
         conversation_id = metadata.get("conversation_id", str(sample.index))
         env = P4gEnvironment(
             persuader_persona=persuader_persona,
@@ -137,11 +112,11 @@ async def p4g_generate_rollout(
             conversation_id=conversation_id,
         )
 
-        # --- Create generate function (TITO: input_ids → token_ids + logprobs) ---
         sglang_url = (
             f"http://{args.sglang_router_ip}:{args.sglang_router_port}/generate"
         )
 
+        @weave.op
         async def generate_fn(
             input_ids: list, samp_params: Dict[str, Any]
         ) -> Dict[str, Any]:
@@ -159,15 +134,13 @@ async def p4g_generate_rollout(
                 "meta_info": meta,
             }
 
-        # --- Load tokenizer ---
         tokenizer = load_tokenizer(args.hf_checkpoint, trust_remote_code=True)
 
-        # --- Create orchestrator and run ---
         config = UserSimConfig(
             trainable_role=TrainableRole(getattr(args, "trainable_role", "agent")),
             max_turns=num_exchanges,
-            max_tokens=getattr(args, "max_tokens", 2048),
-            max_context_length=getattr(args, "rollout_max_response_len", 4096),
+            max_tokens=getattr(args, "max_tokens", 8192),
+            max_context_length=getattr(args, "rollout_max_response_len", 32768),
             temperature=sampling_params.get("temperature", 0.7),
         )
 
@@ -179,24 +152,236 @@ async def p4g_generate_rollout(
             f"reward={trajectory.reward:.2f}, status={trajectory.status}"
         )
 
-        # Convert to Slime sample
-        output_sample = trajectory_to_slime_sample(trajectory, sample.index)
-        return [output_sample]
+        return trajectory_to_slime_sample(trajectory, sample.index)
 
     except Exception as e:
-        logger.error(f"P4G rollout failed: {e}", exc_info=True)
-        return [
-            Sample(
-                index=sample.index,
-                prompt=sample.prompt,
-                tokens=[],
-                response="",
-                reward=0.0,
-                loss_mask=[],
-                response_length=0,
-                metadata={"error": str(e)},
-            )
-        ]
+        logger.error(f"P4G rollout failed (sample {sample.index}): {e}", exc_info=True)
+        return Sample(
+            index=sample.index,
+            prompt=sample.prompt,
+            tokens=[],
+            response="",
+            reward=0.0,
+            loss_mask=[],
+            response_length=0,
+            metadata={"error": str(e)},
+        )
+
+
+async def _run_batch_async(
+    args: Namespace,
+    samples: List[List[Sample]],
+) -> List[List[Sample]]:
+    """Run a batch of samples concurrently, returning grouped results."""
+    sampling_params = dict(
+        temperature=args.rollout_temperature,
+        top_p=getattr(args, "rollout_top_p", 0.95),
+        top_k=getattr(args, "rollout_top_k", -1),
+        max_new_tokens=8192,
+    )
+
+    tasks = []
+    for group in samples:
+        for sample in group:
+            tasks.append(_p4g_generate_single(args, sample, sampling_params))
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    grouped = []
+    idx = 0
+    for group in samples:
+        group_results = []
+        for _ in group:
+            result = results[idx]
+            if isinstance(result, Exception):
+                logger.error(f"Sample failed: {result}")
+                result = Sample(
+                    index=group[0].index,
+                    tokens=[],
+                    response="",
+                    reward=0.0,
+                    loss_mask=[],
+                    response_length=0,
+                    metadata={"error": str(result)},
+                )
+            group_results.append(result)
+            idx += 1
+        grouped.append(group_results)
+
+    return grouped
+
+
+async def _p4g_eval_single_dataset(
+    args: Namespace,
+    dataset_cfg: Any,
+    data_source: Any,
+) -> dict:
+    """Run eval for a single P4G eval dataset config."""
+    metadata_overrides = getattr(dataset_cfg, "metadata_overrides", {}) or {}
+    n_samples = getattr(dataset_cfg, "n_samples_per_eval_prompt", 1)
+    sampling_params = dict(
+        temperature=getattr(dataset_cfg, "temperature", 0.7),
+        top_p=getattr(dataset_cfg, "top_p", 0.95),
+        top_k=getattr(dataset_cfg, "top_k", -1),
+        max_new_tokens=getattr(dataset_cfg, "max_response_len", None)
+            or args.rollout_max_response_len,
+    )
+
+    # Override user model config from metadata
+    eval_args = Namespace(**vars(args))
+    if "usim_fixed_opponent_model" in metadata_overrides:
+        eval_args.usim_fixed_opponent_model = metadata_overrides["usim_fixed_opponent_model"]
+    if "usim_fixed_opponent_base_url" in metadata_overrides:
+        eval_args.usim_fixed_opponent_base_url = metadata_overrides["usim_fixed_opponent_base_url"]
+    if "usim_fixed_opponent_api_key_var" in metadata_overrides:
+        eval_args.usim_fixed_opponent_api_key_var = metadata_overrides["usim_fixed_opponent_api_key_var"]
+
+    # Get test samples from data_source
+    eval_samples = data_source.get_eval_samples() if hasattr(data_source, "get_eval_samples") else data_source.get_samples(16)
+
+    coros = []
+    sample_idx = 0
+    for group in eval_samples:
+        for sample in group:
+            for j in range(n_samples):
+                s = Sample(
+                    index=sample_idx,
+                    prompt=sample.prompt,
+                    metadata={**(sample.metadata or {}), **metadata_overrides},
+                )
+                sample_idx += 1
+                coros.append(_p4g_generate_single(eval_args, s, sampling_params))
+
+    results = await asyncio.gather(*coros, return_exceptions=True)
+
+    data = []
+    for r in results:
+        if isinstance(r, Exception):
+            logger.error(f"P4G eval sample failed: {r}")
+            data.append(Sample(index=0, reward=0.0))
+        else:
+            data.append(r)
+
+    reward_key = getattr(args, "eval_reward_key", None) or getattr(args, "reward_key", None)
+    return {
+        dataset_cfg.name: {
+            "rewards": [
+                s.reward if not reward_key else s.reward[reward_key]
+                for s in data
+            ],
+            "truncated": [s.status == Sample.Status.TRUNCATED for s in data],
+            "samples": data,
+        }
+    }
+
+
+def _p4g_eval_rollout(
+    args: Namespace,
+    rollout_id: int,
+    data_source: Any,
+) -> RolloutFnEvalOutput:
+    """Run P4G eval across all configured eval datasets."""
+    eval_datasets = getattr(args, "eval_datasets", []) or []
+    if not eval_datasets:
+        logger.warning("[P4G] No eval datasets configured")
+        return RolloutFnEvalOutput(data={})
+
+    async def _run_all():
+        coros = [_p4g_eval_single_dataset(args, cfg, data_source) for cfg in eval_datasets]
+        results_list = await asyncio.gather(*coros)
+        results = {}
+        for r in results_list:
+            results.update(r)
+        return results
+
+    data = asyncio.run(_run_all())
+    return RolloutFnEvalOutput(data=data)
+
+
+def p4g_generate_rollout(
+    args: Namespace,
+    rollout_id: int,
+    data_source: Any,
+    evaluation: bool = False,
+) -> RolloutFnTrainOutput | RolloutFnEvalOutput:
+    """Batch-level rollout function for P4G."""
+    if evaluation:
+        return _p4g_eval_rollout(args, rollout_id, data_source)
+
+    samples = data_source.get_samples(args.rollout_batch_size)
+    grouped_results = asyncio.run(_run_batch_async(args, samples))
+
+    # Compute rollout metrics
+    metrics = _compute_rollout_metrics(grouped_results, rollout_id, prefix="P4G")
+
+    return RolloutFnTrainOutput(samples=grouped_results, metrics=metrics)
+
+
+def _compute_rollout_metrics(
+    grouped_results: List[List[Sample]],
+    rollout_id: int,
+    prefix: str = "P4G",
+) -> dict:
+    """Compute and log rollout metrics including per-sample debug info."""
+    import numpy as np
+
+    all_samples = [s for group in grouped_results for s in group]
+    rewards = [s.reward for s in all_samples if s.reward is not None]
+    turn_counts = [
+        s.metadata.get("turn_count", 0) for s in all_samples if hasattr(s, "metadata") and s.metadata
+    ]
+    response_lengths = [s.response_length for s in all_samples]
+    truncated = [s.status == Sample.Status.TRUNCATED for s in all_samples]
+    failed = [s.status == Sample.Status.FAILED for s in all_samples]
+
+    zero_std_groups = 0
+    for group in grouped_results:
+        group_rewards = [s.reward for s in group if s.reward is not None]
+        if len(group_rewards) >= 2:
+            std = float(np.std(group_rewards))
+            if std == 0.0:
+                zero_std_groups += 1
+
+    num_groups = len(grouped_results)
+    zero_std_pct = zero_std_groups / max(num_groups, 1)
+
+    metrics = {
+        "rollout/num_samples": len(all_samples),
+        "rollout/num_groups": num_groups,
+        "rollout/raw_reward/mean": float(np.mean(rewards)) if rewards else 0.0,
+        "rollout/raw_reward/std": float(np.std(rewards)) if rewards else 0.0,
+        "rollout/raw_reward/min": float(np.min(rewards)) if rewards else 0.0,
+        "rollout/raw_reward/max": float(np.max(rewards)) if rewards else 0.0,
+        "rollout/turn_count/mean": float(np.mean(turn_counts)) if turn_counts else 0.0,
+        "rollout/turn_count/max": int(np.max(turn_counts)) if turn_counts else 0,
+        "rollout/response_len/mean": float(np.mean(response_lengths)) if response_lengths else 0.0,
+        "rollout/truncated_ratio": float(np.mean(truncated)) if truncated else 0.0,
+        "rollout/failed_ratio": float(np.mean(failed)) if failed else 0.0,
+        "rollout/zero_std_group_pct": zero_std_pct,
+    }
+
+    logger.info(
+        f"[{prefix}] Rollout {rollout_id}: "
+        f"{len(all_samples)} samples in {num_groups} groups | "
+        f"reward={metrics['rollout/raw_reward/mean']:.3f}+-{metrics['rollout/raw_reward/std']:.3f} "
+        f"[{metrics['rollout/raw_reward/min']:.3f}, {metrics['rollout/raw_reward/max']:.3f}] | "
+        f"turns={metrics['rollout/turn_count/mean']:.1f} (max={metrics['rollout/turn_count/max']}) | "
+        f"resp_len={metrics['rollout/response_len/mean']:.0f} | "
+        f"truncated={metrics['rollout/truncated_ratio']:.1%} | "
+        f"failed={metrics['rollout/failed_ratio']:.1%} | "
+        f"zero_std_groups={zero_std_pct:.1%} ({zero_std_groups}/{num_groups})"
+    )
+
+    for i, s in enumerate(all_samples[:3]):
+        meta = s.metadata or {}
+        logger.info(
+            f"[{prefix}] Sample {s.index}: "
+            f"reward={s.reward:.3f}, turns={meta.get('turn_count', '?')}, "
+            f"tokens={len(s.tokens)}, resp_len={s.response_length}, "
+            f"status={s.status}, response={s.response[:100]}..."
+        )
+
+    return metrics
 
 
 def add_p4g_arguments(parser: Any) -> None:

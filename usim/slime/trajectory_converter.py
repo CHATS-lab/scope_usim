@@ -28,7 +28,7 @@ def trajectory_to_slime_sample(
         Slime Sample object
     """
     try:
-        from slime.data.types import Sample
+        from slime.utils.types import Sample
     except ImportError:
         raise ImportError("slime package required for trajectory conversion")
 

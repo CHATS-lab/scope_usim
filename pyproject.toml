@@ -27,6 +27,7 @@ classifiers = [
 dependencies = [
   "numpy>=1.24.0",
   "tqdm>=4.65.0",
+  "weave",
 ]
 
 [project.optional-dependencies]
