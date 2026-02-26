@@ -20,6 +20,7 @@ from slime.utils.types import Sample
 
 from usim.core.environment.p4g import P4gEnvironment
 from usim.core.orchestrator import UserSimOrchestrator
+from usim.core.trajectory_recorder import TrajectoryRecorder
 from usim.core.types import TrainableRole, UserSimConfig
 from usim.p4g.persona import PersonaLoader
 from usim.slime.trajectory_converter import trajectory_to_slime_sample
@@ -262,6 +263,12 @@ async def _p4g_eval_single_dataset(
         else:
             data.append(r)
 
+    # Record eval trajectories
+    output_dir = getattr(args, "trajectory_output_dir", None)
+    if output_dir:
+        recorder = TrajectoryRecorder(os.path.join(output_dir, "eval"))
+        recorder.record_batch(data, rollout_id=0, extra_metadata={"eval_dataset": dataset_cfg.name})
+
     reward_key = getattr(args, "eval_reward_key", None) or getattr(args, "reward_key", None)
     return {
         dataset_cfg.name: {
@@ -313,6 +320,13 @@ def p4g_generate_rollout(
 
     # Compute rollout metrics
     metrics = _compute_rollout_metrics(grouped_results, rollout_id, prefix="P4G")
+
+    # Record trajectories to JSONL
+    output_dir = getattr(args, "trajectory_output_dir", None)
+    if output_dir:
+        recorder = TrajectoryRecorder(output_dir)
+        all_samples = [s for group in grouped_results for s in group]
+        recorder.record_batch(all_samples, rollout_id)
 
     return RolloutFnTrainOutput(samples=grouped_results, metrics=metrics)
 
@@ -414,4 +428,11 @@ def add_p4g_arguments(parser: Any) -> None:
         type=int,
         default=10,
         help="Total conversation turns, each side gets num_turns//2 (default: 10)",
+    )
+
+    group.add_argument(
+        "--trajectory-output-dir",
+        type=str,
+        default=None,
+        help="Directory to save trajectory JSONL files (disabled if not set)",
     )

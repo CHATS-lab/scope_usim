@@ -67,6 +67,7 @@ P4G_ARGS=(
    --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
    --p4g-word-limit 50
    --p4g-num-turns 10
+   --trajectory-output-dir "${OUTPUT_DIR}/trajectories"
 )
 
 PERF_ARGS=(
