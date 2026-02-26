@@ -25,9 +25,12 @@ pip install -e ".[full]"      # All backends + dev tools
 ```bash
 pytest tests/                              # All tests
 pytest tests/test_orchestrator.py -v       # Single test file
+pytest tests/test_cooperbench.py -v        # CooperBench smoke tests (needs slime + cooperbench)
 pytest tests/ --cov=usim --cov-report=html # With coverage
 ```
 Async tests use `asyncio_mode = "auto"` (needs `pytest-asyncio`).
+
+**CooperBench smoke tests** (`tests/test_cooperbench.py`): 32 tests covering data source loading (entry counts per setting, sample grouping, cycling), agent prompts (setting-aware collaboration blocks, solo combined prompts, stop signal), and reward functions (all 3 settings, partial reward, error handling, async wrappers). Requires `slime` and `cooperbench` packages — run on remote machine. No Modal/Redis/Docker needed.
 
 ### Code Quality
 ```bash
@@ -54,6 +57,11 @@ bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_multi.sh
 
 # Persuasion for Good: Qwen3-4B-Instruct (persuader) + gpt-5-mini (persuadee)
 bash cmd/slime/qwen3_4b_instruct/0220/train_p4g.sh
+
+# CooperBench: Qwen3-4B-Instruct coding agent (solo setting by default)
+bash cmd/slime/qwen3_4b_instruct/0220/train_cooperbench.sh
+# Override setting: COOPERBENCH_SETTING=baseline|solo|coop
+COOPERBENCH_SETTING=coop bash cmd/slime/qwen3_4b_instruct/0220/train_cooperbench.sh
 ```
 
 ## Architecture
@@ -153,13 +161,14 @@ Each backend provides:
 | Arg | Default | Description |
 |---|---|---|
 | `--trainable-role` | `agent` | Which role to train |
-| `--cooperbench-subset` | `None` | Subset: `lite`, `flash`, or all |
-| `--cooperbench-repo` | `None` | Filter by repository name |
-| `--cooperbench-partner-model` | `gpt-5-mini` | Partner agent's LLM model |
+| `--cooperbench-setting` | `solo` | Setting: `baseline`, `solo`, `coop` |
+| `--cooperbench-data-dir` | `data/cooperbench` | Path to JSON files (train_pairs.json, etc.) |
+| `--cooperbench-backend` | `modal` | Sandbox backend: `modal`, `docker` |
+| `--cooperbench-partner-model` | `gpt-5-mini` | Partner agent's LLM model (coop only) |
 | `--cooperbench-max-steps` | `50` | Max steps per agent |
-| `--cooperbench-redis-url` | `redis://localhost:6379` | Redis for messaging |
-| `--cooperbench-dataset-dir` | `None` | Path to CooperBench directory |
-| `--cooperbench-partial-reward` | `False` | 0.5 reward when agent passes but merge fails |
+| `--cooperbench-redis-url` | `redis://localhost:6379` | Redis for messaging (coop only) |
+| `--cooperbench-dataset-dir` | `None` | Path to CooperBench repo (with dataset/) for eval |
+| `--cooperbench-partial-reward` | `False` | 0.5 reward when agent passes but merge fails (coop only) |
 
 ## CLI Arguments (P4G, `train_p4g_slime.py`)
 
@@ -216,13 +225,18 @@ All experiments use GRPO with within-batch normalization (`--grpo-std-normalizat
 - **Wandb**: `usim / qwen3-4B-Instruct-2507-p4g-0220`
 - **Training entry**: `train_p4g_slime.py`
 
-### Exp 3: CooperBench (0206, not yet updated for 0220)
-- **Status**: SCRIPT READY (0206 only), NOT YET RUN
-- **Script**: `cmd/slime/qwen3_4b_instruct/0206/train_cooperbench.sh`
-- **Agent**: Qwen3-4B-Instruct-2507 (SGLang) — implements feature 1
-- **Partner**: gpt-5-mini via mini_swe_agent — implements feature 2
-- **Dataset**: CooperBench lite subset
-- **Pre-reqs**: Redis running, Modal configured, CooperBench dataset downloaded
+### Exp 3: CooperBench (0220)
+- **Status**: READY TO RUN
+- **Script**: `cmd/slime/qwen3_4b_instruct/0220/train_cooperbench.sh`
+- **Agent**: Qwen3-4B-Instruct-2507 (SGLang) — coding agent
+- **Settings**: baseline (170 features), solo (587 pairs), coop (1174 directed)
+- **Data**: Pre-split JSON files in `data/cooperbench/` (train_baseline.json, train_pairs.json)
+- **Sandbox**: Modal (via SwerexModalEnvironment for agent, cooperbench backends for eval)
+- **Partner** (coop only): gpt-5-mini via mini_swe_agent + LiteLLM
+- **Pre-reqs**: Modal configured, CooperBench dataset downloaded
+- **Pre-reqs** (coop only): Redis running
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-cooperbench-{setting}-0220`
+- **Override**: `COOPERBENCH_SETTING=baseline|solo|coop`
 
 ## Remote Machine: Quick Start
 
@@ -283,7 +297,8 @@ usim/
 │   ├── train_tau2_haiku.sh               # Exp 1b: tau2 + haiku
 │   ├── train_tau2_gemini.sh              # Exp 1c: tau2 + gemini
 │   ├── train_tau2_multi.sh               # Exp 1d: tau2 + multi-model rotation
-│   └── train_p4g.sh                      # Exp 2: P4G
+│   ├── train_p4g.sh                      # Exp 2: P4G
+│   └── train_cooperbench.sh             # Exp 3: CooperBench (baseline/solo/coop)
 ├── eval_configs/                         # Reusable eval YAML templates
 │   ├── tau2_retail_6model.yaml           # 6-model eval for tau2
 │   └── p4g_6model.yaml                   # 6-model eval for P4G
@@ -291,6 +306,11 @@ usim/
 │   ├── corpus/                           # Convokit corpus for persona loading
 │   ├── train/                            # 739 training dialogues
 │   └── test/                             # 200 test dialogues
+├── data/cooperbench/                     # CooperBench pre-split JSON files
+│   ├── train_pairs.json                  # 587 training pairs (solo/coop)
+│   ├── test_pairs.json                   # Test pairs
+│   ├── train_baseline.json               # 170 training features (baseline)
+│   └── test_baseline.json                # Test baseline features
 ├── train_usim_slime.py                   # Training entry point (tau2)
 ├── train_cooperbench_slime.py            # Training entry point (CooperBench)
 ├── train_p4g_slime.py                    # Training entry point (P4G)

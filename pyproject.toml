@@ -50,6 +50,11 @@ tau2 = [
   "pydantic>=2.0.0",
 ]
 
+# CooperBench integration (cooperbench itself installed via pip install -e ../CooperBench)
+cooperbench = [
+  "redis>=5.0.0",
+]
+
 # Development dependencies
 dev = [
   "pytest>=7.0.0",
@@ -62,7 +67,7 @@ dev = [
 
 # All optional dependencies
 all = [
-  "usim[slime,tinker,tau2]",
+  "usim[slime,tinker,tau2,cooperbench]",
 ]
 
 # Full development setup

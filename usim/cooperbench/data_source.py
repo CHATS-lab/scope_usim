@@ -1,156 +1,207 @@
-"""Data source for loading CooperBench tasks into Slime format."""
+"""Data source for loading CooperBench tasks into Slime format.
 
+Loads pre-split JSON files from usim/data/cooperbench/ and implements
+the Slime DataSource protocol for training.
+
+Supports three settings:
+- baseline: 1 agent, 1 feature (train_baseline.json)
+- solo: 1 agent, 2 features (train_pairs.json)
+- coop: 2 agents, 1 feature each — each pair expanded into 2 directed entries
+"""
+
+import json
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from slime.rollout.data_source import DataSource
+from slime.utils.types import Sample
+
+from cooperbench.utils import get_image_name
 
 logger = logging.getLogger(__name__)
 
 
-class CooperBenchDataSource:
-    """Data source for CooperBench tasks.
+class CooperBenchDataSource(DataSource):
+    """Data source for CooperBench tasks following Slime's DataSource protocol."""
 
-    Loads tasks from CooperBench's dataset/ directory and converts them
-    to Slime Sample format for training.
-    """
+    def __init__(self, args):
+        self.args = args
+        self.setting = getattr(args, "cooperbench_setting", "solo")
+        self.data_dir = Path(
+            getattr(args, "cooperbench_data_dir", "")
+            or str(Path(__file__).parent.parent.parent / "data" / "cooperbench")
+        )
 
-    def __init__(
-        self,
-        subset: Optional[str] = None,
-        repo_filter: Optional[str] = None,
-        task_filter: Optional[int] = None,
-        dataset_dir: Optional[str] = None,
-    ):
-        """Initialize CooperBench data source.
+        # Tracking attributes required by DataSource
+        self.epoch_id = 0
+        self.sample_group_index = 0
+        self.sample_index = 0
+        self.sample_offset = 0
+        self.metadata = {}
 
-        Args:
-            subset: Predefined subset (e.g., 'lite', 'flash')
-            repo_filter: Filter by repository name
-            task_filter: Filter by task ID
-            dataset_dir: Path to CooperBench dataset directory
-        """
-        self.subset = subset
-        self.repo_filter = repo_filter
-        self.task_filter = task_filter
-        self.dataset_dir = dataset_dir
-        self._tasks: Optional[List[Dict[str, Any]]] = None
+        self._entries: Optional[List[Dict[str, Any]]] = None
 
-    def _load_tasks(self) -> List[Dict[str, Any]]:
-        """Load tasks from CooperBench."""
-        if self._tasks is not None:
-            return self._tasks
+        logger.info(
+            f"[CB] Initialized CooperBenchDataSource: "
+            f"setting={self.setting}, data_dir={self.data_dir}"
+        )
 
-        # Change to dataset directory if specified
-        original_cwd = os.getcwd()
-        if self.dataset_dir:
-            os.chdir(self.dataset_dir)
+    def _load_entries(self) -> List[Dict[str, Any]]:
+        """Load and expand task entries from JSON files."""
+        if self._entries is not None:
+            return self._entries
 
-        try:
-            from cooperbench.runner.tasks import discover_tasks
-            from cooperbench.utils import get_image_name
-
-            raw_tasks = discover_tasks(
-                subset=self.subset,
-                repo_filter=self.repo_filter,
-                task_filter=self.task_filter,
-            )
-
-            tasks = []
-            for t in raw_tasks:
-                repo = t["repo"]
-                task_id = t["task_id"]
-                features = t["features"]
-                image_name = get_image_name(repo, task_id)
-
-                # Load feature descriptions
-                feature_descriptions = {}
-                task_dir = Path("dataset") / repo / f"task{task_id}"
-                for fid in features:
-                    feature_file = task_dir / f"feature{fid}" / "feature.md"
-                    if feature_file.exists():
-                        feature_descriptions[fid] = feature_file.read_text()
-
-                tasks.append({
-                    "repo": repo,
-                    "task_id": task_id,
-                    "features": features,
-                    "feature_descriptions": feature_descriptions,
-                    "image_name": image_name,
+        if self.setting == "baseline":
+            json_path = self.data_dir / "train_baseline.json"
+            raw = self._read_json(json_path)
+            # baseline entries have: id, repo, task_id, feature_id, description
+            entries = []
+            for item in raw:
+                entries.append({
+                    "repo": item["repo"],
+                    "task_id": item["task_id"],
+                    "feature_ids": [item["feature_id"]],
+                    "descriptions": {str(item["feature_id"]): item["description"]},
+                    "setting": "baseline",
+                    "agent_feature_id": item["feature_id"],
+                    "partner_feature_id": None,
+                    "image_name": get_image_name(item["repo"], item["task_id"]),
                 })
-
-            self._tasks = tasks
-            logger.info(f"Loaded {len(tasks)} CooperBench tasks (subset={self.subset})")
-            return tasks
-
-        except ImportError:
-            logger.warning("cooperbench not available, returning empty task list")
-            self._tasks = []
-            return []
-        finally:
-            if self.dataset_dir:
-                os.chdir(original_cwd)
-
-    def to_slime_samples(self) -> List[Any]:
-        """Convert all tasks to Slime Sample format.
-
-        Returns:
-            List of Slime Sample objects
-        """
-        try:
-            from slime.data.types import Sample
-        except ImportError:
-            raise ImportError("slime package required for to_slime_samples")
-
-        tasks = self._load_tasks()
-        samples = []
-
-        for i, task in enumerate(tasks):
-            f1, f2 = task["features"]
-            # Use feature 1 description as the prompt (agent's task)
-            prompt = task["feature_descriptions"].get(f1, "")
-
-            sample = Sample(
-                index=i,
-                prompt=prompt,
-                tokens=[],
-                response="",
-                reward=0.0,
-                loss_mask=[],
-                response_length=0,
-                metadata={
-                    "repo": task["repo"],
-                    "task_id": task["task_id"],
-                    "features": task["features"],
-                    "feature_descriptions": task["feature_descriptions"],
-                    "image_name": task["image_name"],
+        elif self.setting == "solo":
+            json_path = self.data_dir / "train_pairs.json"
+            raw = self._read_json(json_path)
+            # pairs entries have: id, repo, task_id, feature_ids, descriptions
+            entries = []
+            for item in raw:
+                f1, f2 = item["feature_ids"]
+                entries.append({
+                    "repo": item["repo"],
+                    "task_id": item["task_id"],
+                    "feature_ids": item["feature_ids"],
+                    "descriptions": item["descriptions"],
+                    "setting": "solo",
                     "agent_feature_id": f1,
                     "partner_feature_id": f2,
-                },
-            )
-            samples.append(sample)
+                    "image_name": get_image_name(item["repo"], item["task_id"]),
+                })
+        elif self.setting == "coop":
+            json_path = self.data_dir / "train_pairs.json"
+            raw = self._read_json(json_path)
+            # Expand each pair into 2 directed entries
+            entries = []
+            for item in raw:
+                f1, f2 = item["feature_ids"]
+                base = {
+                    "repo": item["repo"],
+                    "task_id": item["task_id"],
+                    "feature_ids": item["feature_ids"],
+                    "descriptions": item["descriptions"],
+                    "setting": "coop",
+                    "image_name": get_image_name(item["repo"], item["task_id"]),
+                }
+                # Direction A: agent=f1, partner=f2
+                entries.append({
+                    **base,
+                    "agent_feature_id": f1,
+                    "partner_feature_id": f2,
+                })
+                # Direction B: agent=f2, partner=f1
+                entries.append({
+                    **base,
+                    "agent_feature_id": f2,
+                    "partner_feature_id": f1,
+                })
+        else:
+            raise ValueError(f"Unknown setting: {self.setting}")
+
+        self._entries = entries
+        logger.info(f"[CB] Loaded {len(entries)} entries (setting={self.setting})")
+        return entries
+
+    def _read_json(self, path: Path) -> list:
+        if not path.exists():
+            logger.warning(f"JSON file not found: {path}")
+            return []
+        with open(path) as f:
+            return json.load(f)
+
+    def _entry_to_sample(self, entry: Dict[str, Any], group_index: int, index: int) -> Sample:
+        """Convert an entry dict to a Slime Sample."""
+        agent_fid = entry["agent_feature_id"]
+        prompt = entry["descriptions"].get(
+            str(agent_fid), entry["descriptions"].get(agent_fid, "")
+        )
+        return Sample(
+            group_index=group_index,
+            index=index,
+            prompt=prompt,
+            tokens=[],
+            response="",
+            reward=0.0,
+            loss_mask=[],
+            response_length=0,
+            metadata={
+                "repo": entry["repo"],
+                "task_id": entry["task_id"],
+                "feature_ids": entry["feature_ids"],
+                "descriptions": entry["descriptions"],
+                "setting": entry["setting"],
+                "agent_feature_id": entry["agent_feature_id"],
+                "partner_feature_id": entry["partner_feature_id"],
+                "image_name": entry["image_name"],
+            },
+        )
+
+    def get_samples(self, num_samples: int) -> List[List[Sample]]:
+        """Return sample groups for rollout.
+
+        Each group contains n_samples_per_prompt samples for the same task,
+        cycling through entries as needed.
+        """
+        entries = self._load_entries()
+
+        if not entries:
+            return [
+                [
+                    Sample(group_index=i, index=i)
+                    for _ in range(self.args.n_samples_per_prompt)
+                ]
+                for i in range(num_samples)
+            ]
+
+        samples = []
+        for _ in range(num_samples):
+            entry_idx = self.sample_offset % len(entries)
+            entry = entries[entry_idx]
+            self.sample_offset += 1
+
+            group = []
+            for _ in range(self.args.n_samples_per_prompt):
+                sample = self._entry_to_sample(
+                    entry, self.sample_group_index, self.sample_index
+                )
+                self.sample_index += 1
+                group.append(sample)
+            self.sample_group_index += 1
+            samples.append(group)
 
         return samples
 
+    def add_samples(self, samples: List[List[Sample]]):
+        """No-op: CooperBench generates trajectories on-the-fly."""
+        pass
 
-def get_cooperbench_samples(
-    subset: Optional[str] = None,
-    repo_filter: Optional[str] = None,
-    dataset_dir: Optional[str] = None,
-) -> List[Any]:
-    """Convenience function to get CooperBench tasks as Slime samples.
+    def save(self, rollout_id):
+        pass
 
-    Args:
-        subset: Predefined subset (e.g., 'lite', 'flash')
-        repo_filter: Filter by repository name
-        dataset_dir: Path to CooperBench dataset directory
+    def load(self, rollout_id=None):
+        pass
 
-    Returns:
-        List of Slime Sample objects
+
+def get_cooperbench_data_source(args) -> CooperBenchDataSource:
+    """Factory function called by Slime's RolloutManager.
+
+    This is the entry point referenced by --data-source-path.
     """
-    data_source = CooperBenchDataSource(
-        subset=subset,
-        repo_filter=repo_filter,
-        dataset_dir=dataset_dir,
-    )
-    return data_source.to_slime_samples()
+    return CooperBenchDataSource(args)
