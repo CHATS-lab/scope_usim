@@ -29,7 +29,7 @@ echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
-COOPERBENCH_DIR="${PROJECT_ROOT}/CooperBench"
+COOPERBENCH_DIR="${PROJECT_ROOT}/external/CooperBench"
 
 # Setting: baseline, solo, or coop (override via COOPERBENCH_SETTING env var)
 SETTING="${COOPERBENCH_SETTING:-solo}"
