@@ -66,6 +66,7 @@ USIM_ARGS=(
    --usim-fixed-opponent-model "anthropic/claude-haiku-4.5"
    --usim-fixed-opponent-base-url "https://openrouter.ai/api/v1"
    --usim-fixed-opponent-api-key-var "OPENROUTER_API_KEY"
+   --trajectory-output-dir "${OUTPUT_DIR}/trajectories"
 )
 
 PERF_ARGS=(

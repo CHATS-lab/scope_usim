@@ -70,6 +70,7 @@ USIM_ARGS=(
    --usim-fixed-opponent-model "anthropic/claude-haiku-4.5,gpt-5-mini,google/gemini-3-flash-preview"
    --usim-fixed-opponent-base-url "https://openrouter.ai/api/v1,https://api.openai.com/v1,https://openrouter.ai/api/v1"
    --usim-fixed-opponent-api-key-var "OPENROUTER_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY"
+   --trajectory-output-dir "${OUTPUT_DIR}/trajectories"
 )
 
 PERF_ARGS=(

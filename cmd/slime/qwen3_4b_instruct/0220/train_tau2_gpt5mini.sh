@@ -64,6 +64,7 @@ USIM_ARGS=(
    --max-turns 30
    --usim-domain retail
    --usim-fixed-opponent-model "gpt-5-mini"
+   --trajectory-output-dir "${OUTPUT_DIR}/trajectories"
 )
 
 PERF_ARGS=(
