@@ -41,27 +41,27 @@ Line length is 100 characters. Target Python is 3.10+.
 
 **Import convention:** Always place imports at the top of the file. Do not use lazy imports inside functions unless absolutely necessary (e.g., circular import resolution). Backend-specific modules (`usim/slime/`, `usim/tinker/`) may import their backend dependencies (`slime`, `tau2`, `sglang`) at the top level since they are only loaded when the backend is installed.
 
-### Training (Slime) — 0220 Experiments
+### Training (Slime) — 0226 Experiments
 ```bash
 # tau2-bench: Qwen3-4B-Instruct + gpt-5-mini user sim
-bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_gpt5mini.sh
+bash cmd/slime/qwen3_4b_instruct/0226/train_tau2_gpt5mini.sh
 
 # tau2-bench: Qwen3-4B-Instruct + haiku user sim
-bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_haiku.sh
+bash cmd/slime/qwen3_4b_instruct/0226/train_tau2_haiku.sh
 
 # tau2-bench: Qwen3-4B-Instruct + gemini user sim
-bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_gemini.sh
+bash cmd/slime/qwen3_4b_instruct/0226/train_tau2_gemini.sh
 
 # tau2-bench: Qwen3-4B-Instruct + multi-model rotation
-bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_multi.sh
+bash cmd/slime/qwen3_4b_instruct/0226/train_tau2_multi.sh
 
 # Persuasion for Good: Qwen3-4B-Instruct (persuader) + gpt-5-mini (persuadee)
-bash cmd/slime/qwen3_4b_instruct/0220/train_p4g.sh
+bash cmd/slime/qwen3_4b_instruct/0226/train_p4g.sh
 
 # CooperBench: Qwen3-4B-Instruct coding agent (solo setting by default)
-bash cmd/slime/qwen3_4b_instruct/0220/train_cooperbench.sh
+bash cmd/slime/qwen3_4b_instruct/0226/train_cooperbench.sh
 # Override setting: COOPERBENCH_SETTING=baseline|solo|coop
-COOPERBENCH_SETTING=coop bash cmd/slime/qwen3_4b_instruct/0220/train_cooperbench.sh
+COOPERBENCH_SETTING=coop bash cmd/slime/qwen3_4b_instruct/0226/train_cooperbench.sh
 ```
 
 ## Architecture
@@ -182,52 +182,52 @@ Each backend provides:
 | `--p4g-word-limit` | `50` | Max words per response |
 | `--p4g-num-turns` | `10` | Number of conversation turns |
 
-## Experiment Tracker (0220)
+## Experiment Tracker (0226)
 
 All experiments use GRPO with within-batch normalization (`--grpo-std-normalization --rewards-normalization`), n_samples_per_prompt=8, and 6-model eval configs in `eval_configs/`.
 
 ### Exp 1a: tau2-bench + gpt-5-mini user sim
 - **Status**: READY TO RUN
-- **Script**: `cmd/slime/qwen3_4b_instruct/0220/train_tau2_gpt5mini.sh`
+- **Script**: `cmd/slime/qwen3_4b_instruct/0226/train_tau2_gpt5mini.sh`
 - **Agent**: Qwen3-4B-Instruct-2507 (SGLang)
 - **User sim**: gpt-5-mini via OpenAI API
 - **Dataset**: tau2-bench retail (1000 tasks)
 - **Eval**: 6-model eval every 16 steps (`eval_configs/tau2_retail_6model.yaml`)
-- **Wandb**: `usim / qwen3-4B-Instruct-2507-tau2-gpt5mini-0220`
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-tau2-gpt5mini-0226`
 
 ### Exp 1b: tau2-bench + haiku user sim
 - **Status**: READY TO RUN
-- **Script**: `cmd/slime/qwen3_4b_instruct/0220/train_tau2_haiku.sh`
+- **Script**: `cmd/slime/qwen3_4b_instruct/0226/train_tau2_haiku.sh`
 - **User sim**: claude-haiku-4.5 via OpenRouter
-- **Wandb**: `usim / qwen3-4B-Instruct-2507-tau2-haiku-0220`
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-tau2-haiku-0226`
 
 ### Exp 1c: tau2-bench + gemini user sim
 - **Status**: READY TO RUN
-- **Script**: `cmd/slime/qwen3_4b_instruct/0220/train_tau2_gemini.sh`
+- **Script**: `cmd/slime/qwen3_4b_instruct/0226/train_tau2_gemini.sh`
 - **User sim**: gemini-3-flash-preview via OpenRouter
-- **Wandb**: `usim / qwen3-4B-Instruct-2507-tau2-gemini-0220`
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-tau2-gemini-0226`
 
 ### Exp 1d: tau2-bench + multi-model rotation
 - **Status**: READY TO RUN
-- **Script**: `cmd/slime/qwen3_4b_instruct/0220/train_tau2_multi.sh`
+- **Script**: `cmd/slime/qwen3_4b_instruct/0226/train_tau2_multi.sh`
 - **User sim**: rotation of gpt-5-mini, haiku-4.5, gemini-3-flash
 - **Purpose**: Test whether diverse user simulators improve agent robustness
-- **Wandb**: `usim / qwen3-4B-Instruct-2507-tau2-multi-0220`
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-tau2-multi-0226`
 
 ### Exp 2: Persuasion for Good
 - **Status**: READY TO RUN
-- **Script**: `cmd/slime/qwen3_4b_instruct/0220/train_p4g.sh`
+- **Script**: `cmd/slime/qwen3_4b_instruct/0226/train_p4g.sh`
 - **Agent**: Qwen3-4B-Instruct-2507 (SGLang) — persuader role
 - **User sim**: gpt-5-mini via OpenAI API — persuadee role
 - **Dataset**: P4G corpus (739 train / 200 test), data in `data/p4g/`
 - **Reward**: `donation_amount / 2.0` normalized to [0, 1]
 - **Eval**: 6-model eval every 16 steps (`eval_configs/p4g_6model.yaml`)
-- **Wandb**: `usim / qwen3-4B-Instruct-2507-p4g-0220`
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-p4g-0226`
 - **Training entry**: `train_p4g_slime.py`
 
-### Exp 3: CooperBench (0220)
+### Exp 3: CooperBench (0226)
 - **Status**: READY TO RUN
-- **Script**: `cmd/slime/qwen3_4b_instruct/0220/train_cooperbench.sh`
+- **Script**: `cmd/slime/qwen3_4b_instruct/0226/train_cooperbench.sh`
 - **Agent**: Qwen3-4B-Instruct-2507 (SGLang) — coding agent
 - **Settings**: baseline (170 features), solo (587 pairs), coop (1174 directed)
 - **Data**: Pre-split JSON files in `data/cooperbench/` (train_baseline.json, train_pairs.json)
@@ -235,7 +235,7 @@ All experiments use GRPO with within-batch normalization (`--grpo-std-normalizat
 - **Partner** (coop only): gpt-5-mini via mini_swe_agent + LiteLLM
 - **Pre-reqs**: Modal configured, CooperBench dataset downloaded
 - **Pre-reqs** (coop only): Redis running
-- **Wandb**: `usim / qwen3-4B-Instruct-2507-cooperbench-{setting}-0220`
+- **Wandb**: `usim / qwen3-4B-Instruct-2507-cooperbench-{setting}-0226`
 - **Override**: `COOPERBENCH_SETTING=baseline|solo|coop`
 
 ## Remote Machine: Quick Start
@@ -272,13 +272,13 @@ Fixed YAML templates in `eval_configs/`. Resolved via `envsubst` at script runti
 ### 6. Running experiments
 ```bash
 # Recommended order: start with gpt5mini (cheapest), then branch out
-bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_gpt5mini.sh  # Exp 1a
-bash cmd/slime/qwen3_4b_instruct/0220/train_p4g.sh            # Exp 2
+bash cmd/slime/qwen3_4b_instruct/0226/train_tau2_gpt5mini.sh  # Exp 1a
+bash cmd/slime/qwen3_4b_instruct/0226/train_p4g.sh            # Exp 2
 
 # After verifying 1a works, try other user sims
-bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_haiku.sh     # Exp 1b
-bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_gemini.sh    # Exp 1c
-bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_multi.sh     # Exp 1d
+bash cmd/slime/qwen3_4b_instruct/0226/train_tau2_haiku.sh     # Exp 1b
+bash cmd/slime/qwen3_4b_instruct/0226/train_tau2_gemini.sh    # Exp 1c
+bash cmd/slime/qwen3_4b_instruct/0226/train_tau2_multi.sh     # Exp 1d
 ```
 
 ### 7. Debugging tips
@@ -292,7 +292,7 @@ bash cmd/slime/qwen3_4b_instruct/0220/train_tau2_multi.sh     # Exp 1d
 
 ```
 usim/
-├── cmd/slime/qwen3_4b_instruct/0220/   # 0220 experiment scripts
+├── cmd/slime/qwen3_4b_instruct/0226/   # 0226 experiment scripts
 │   ├── train_tau2_gpt5mini.sh            # Exp 1a: tau2 + gpt-5-mini
 │   ├── train_tau2_haiku.sh               # Exp 1b: tau2 + haiku
 │   ├── train_tau2_gemini.sh              # Exp 1c: tau2 + gemini
