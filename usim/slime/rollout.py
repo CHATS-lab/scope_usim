@@ -24,6 +24,7 @@ from tau2.run import get_tasks
 
 from usim.core.environment.tau2 import Tau2Environment
 from usim.core.orchestrator import UserSimOrchestrator
+from usim.core.trajectory_recorder import TrajectoryRecorder
 from usim.core.types import TrainableRole, UserSimConfig
 from usim.slime.trajectory_converter import trajectory_to_slime_sample
 
@@ -253,6 +254,12 @@ async def _usim_eval_single_dataset(
         else:
             data.append(r)
 
+    # Record eval trajectories
+    output_dir = getattr(args, "trajectory_output_dir", None)
+    if output_dir:
+        recorder = TrajectoryRecorder(os.path.join(output_dir, "eval"))
+        recorder.record_batch(data, rollout_id=0, extra_metadata={"eval_dataset": dataset_cfg.name})
+
     reward_key = getattr(args, "eval_reward_key", None) or getattr(args, "reward_key", None)
     return {
         dataset_cfg.name: {
@@ -379,6 +386,13 @@ def usim_generate_rollout(
     # Compute rollout metrics
     metrics = _compute_rollout_metrics(grouped_results, rollout_id, prefix="USIM")
 
+    # Record trajectories to JSONL
+    output_dir = getattr(args, "trajectory_output_dir", None)
+    if output_dir:
+        recorder = TrajectoryRecorder(output_dir)
+        all_samples = [s for group in grouped_results for s in group]
+        recorder.record_batch(all_samples, rollout_id)
+
     return RolloutFnTrainOutput(samples=grouped_results, metrics=metrics)
 
 
@@ -422,4 +436,10 @@ def add_usim_arguments(parser: Any) -> None:
         type=str,
         default="OPENAI_API_KEY",
         help="Env var(s) for API key, comma-separated to match model list",
+    )
+    group.add_argument(
+        "--trajectory-output-dir",
+        type=str,
+        default=None,
+        help="Directory to save trajectory JSONL files (disabled if not set)",
     )
