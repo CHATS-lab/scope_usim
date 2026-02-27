@@ -59,7 +59,7 @@ class CooperBenchEnvironment:
                 "type": "function",
                 "function": {
                     "name": "bash",
-                    "description": "Execute a bash command in the sandbox",
+                    "description": "Execute a bash command",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -79,7 +79,7 @@ class CooperBenchEnvironment:
                     "type": "function",
                     "function": {
                         "name": "send_message",
-                        "description": "Send a message to a teammate agent",
+                        "description": "Send a message to another agent for inter-agent communication",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -89,7 +89,7 @@ class CooperBenchEnvironment:
                                 },
                                 "content": {
                                     "type": "string",
-                                    "description": "The message content",
+                                    "description": "The message content to send",
                                 },
                             },
                             "required": ["recipient", "content"],

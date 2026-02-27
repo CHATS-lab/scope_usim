@@ -34,7 +34,7 @@ STOP_SIGNAL = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
 def _parse_tool_calls(
     response_text: str,
     tools_schema: List[Dict[str, Any]],
-    tool_call_parser: str = "qwen",
+    tool_call_parser: str = "glm",
 ) -> Dict[str, Any]:
     """Parse tool calls from agent response using sglang's FunctionCallParser.
 
@@ -139,7 +139,7 @@ class CodingAgentOrchestrator:
         config: UserSimConfig,
         environment: Any,
         messaging: Optional[Any] = None,
-        tool_call_parser: str = "qwen",
+        tool_call_parser: str = "glm",
     ):
         """Initialize the coding orchestrator.
 
@@ -236,12 +236,16 @@ class CodingAgentOrchestrator:
                 all_logprobs.extend(agent_logprobs)
 
                 error_content = (
-                    "Tool call error:\n\n<error>\nNo tool call found.\n</error>\n\n"
+                    "Tool call error:\n\n<error>\n"
+                    "No tool calls found in the response. Every response MUST include at least one tool call.\n"
+                    "</error>\n\n"
+                    "Here is general guidance on how to submit correct toolcalls:\n\n"
                     "Every response needs to use the 'bash' tool at least once to execute commands.\n\n"
                     "Call the bash tool with your command as the argument:\n"
                     "- Tool: bash\n"
                     '- Arguments: {"command": "your_command_here"}\n\n'
-                    f"If you want to end the task, please issue: bash with `echo {STOP_SIGNAL}`"
+                    f"If you want to end the task, please issue the following command: `echo {STOP_SIGNAL}`\n"
+                    "without any other command."
                 )
                 err_msg = Message(role="user", content=error_content)
                 agent_state = agent_state.add_message(err_msg)

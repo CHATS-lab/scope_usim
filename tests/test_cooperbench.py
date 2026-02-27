@@ -174,6 +174,10 @@ class TestCooperBenchAgent:
         msg = agent.get_task_message("Implement feature X")
         assert "Implement feature X" in msg
         assert "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" in msg
+        # Non-collab uses "Recommended Workflow" (from mini.yaml)
+        assert "Recommended Workflow" in msg
+        assert "example_response" in msg
+        assert "Useful command examples" in msg
 
     def test_solo_task_message_combines_features_sorted(self):
         agent = CooperBenchAgent(setting="solo")
