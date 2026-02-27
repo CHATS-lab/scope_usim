@@ -4,6 +4,7 @@ Wraps a CooperBenchSandbox for bash command execution and optionally
 a MessagingConnector for inter-agent communication.
 """
 
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -13,7 +14,7 @@ from usim.core.types import Message, ToolCall
 
 logger = logging.getLogger(__name__)
 
-# Truncation limits for command output (matches CooperBench's mini.yaml)
+# Truncation limits for command output (matches CooperBench mini_swe_agent_v2/config/mini.yaml)
 MAX_OUTPUT_LEN = 10000
 TRUNCATED_HEAD = 5000
 TRUNCATED_TAIL = 5000
@@ -23,13 +24,15 @@ class CooperBenchEnvironment:
     """USIM environment for CooperBench coding tasks.
 
     Manages a Modal sandbox for bash execution and optional messaging
-    for inter-agent coordination.
+    for inter-agent coordination. Tool calling follows mini-swe-agent-v2
+    protocol: bash tool + optional send_message tool.
     """
 
     def __init__(
         self,
         image_name: str,
         messaging: Optional[MessagingConnector] = None,
+        messaging_enabled: bool = False,
         timeout: int = 3600,
     ):
         """Initialize the environment.
@@ -37,10 +40,12 @@ class CooperBenchEnvironment:
         Args:
             image_name: Docker image for the sandbox
             messaging: Optional messaging connector for inter-agent communication
+            messaging_enabled: Whether to expose the send_message tool
             timeout: Sandbox lifetime in seconds
         """
         self.image_name = image_name
         self.messaging = messaging
+        self.messaging_enabled = messaging_enabled
         self.sandbox = CooperBenchSandbox(
             image_name=image_name,
             timeout=timeout,
@@ -48,12 +53,12 @@ class CooperBenchEnvironment:
         self._step_count = 0
 
     def get_tools(self) -> List[Dict[str, Any]]:
-        """Get available tool schemas (bash_execute)."""
-        return [
+        """Get available tool schemas: bash + optional send_message."""
+        tools = [
             {
                 "type": "function",
                 "function": {
-                    "name": "bash_execute",
+                    "name": "bash",
                     "description": "Execute a bash command in the sandbox",
                     "parameters": {
                         "type": "object",
@@ -68,6 +73,31 @@ class CooperBenchEnvironment:
                 },
             }
         ]
+        if self.messaging_enabled:
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "send_message",
+                        "description": "Send a message to a teammate agent",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "recipient": {
+                                    "type": "string",
+                                    "description": "The agent ID to send the message to",
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "The message content",
+                                },
+                            },
+                            "required": ["recipient", "content"],
+                        },
+                    },
+                }
+            )
+        return tools
 
     def execute_tool(self, tool_call: ToolCall) -> Message:
         """Synchronous tool execution (not used in coding orchestrator)."""
@@ -80,19 +110,16 @@ class CooperBenchEnvironment:
             tool_call: ToolCall with command in arguments
 
         Returns:
-            Message with execution result as content
+            Message with execution result as JSON content (v2 format)
         """
-        command = tool_call.arguments.get("command", "")
+        command = tool_call.arguments.get("command", "") if isinstance(tool_call.arguments, dict) else ""
         result = await self.sandbox.execute(command)
         self._step_count += 1
 
-        output = result["output"]
-        returncode = result["returncode"]
-
-        content = _format_observation(output, returncode)
+        content = _format_observation(result["output"], result["returncode"])
 
         return Message(
-            role="user",
+            role="tool",
             content=content,
             tool_call_id=tool_call.id,
         )
@@ -135,24 +162,16 @@ class CooperBenchEnvironment:
 
 
 def _format_observation(output: str, returncode: int) -> str:
-    """Format command execution result as observation text.
+    """Format command execution result as JSON observation.
 
-    Follows CooperBench's action_observation_template format.
+    Follows CooperBench mini_swe_agent_v2 observation_template format.
     """
-    parts = [f"<returncode>{returncode}</returncode>"]
-
     if len(output) < MAX_OUTPUT_LEN:
-        parts.append(f"<output>\n{output}\n</output>")
-    else:
-        elided = len(output) - MAX_OUTPUT_LEN
-        parts.append(
-            "<warning>\n"
-            "The output of your last command was too long.\n"
-            "Please try a different command that produces less output.\n"
-            "</warning>"
-        )
-        parts.append(f"<output_head>\n{output[:TRUNCATED_HEAD]}\n</output_head>")
-        parts.append(f"<elided_chars>\n{elided} characters elided\n</elided_chars>")
-        parts.append(f"<output_tail>\n{output[-TRUNCATED_TAIL:]}\n</output_tail>")
-
-    return "\n".join(parts)
+        return json.dumps({"returncode": returncode, "output": output})
+    return json.dumps({
+        "returncode": returncode,
+        "output_head": output[:TRUNCATED_HEAD],
+        "output_tail": output[-TRUNCATED_TAIL:],
+        "elided_chars": len(output) - MAX_OUTPUT_LEN,
+        "warning": "Output too long.",
+    })

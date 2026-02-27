@@ -1,7 +1,7 @@
 """CooperBench agent implementing BaseAgent protocol.
 
-Renders system/instance prompts from CooperBench's mini.yaml templates
-for coding agents that interact with a bash sandbox.
+Renders system/instance prompts from CooperBench mini-swe-agent-v2 templates
+for coding agents that use OpenAI-style tool calling (bash + optional send_message).
 """
 
 import logging
@@ -14,23 +14,11 @@ logger = logging.getLogger(__name__)
 
 STOP_SIGNAL = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
 
-# System template ported from CooperBench/src/cooperbench/agents/mini_swe_agent/config/mini.yaml
+# System template — v2 style (from CooperBench mini_swe_agent_v2/config/mini.yaml)
 SYSTEM_TEMPLATE = """\
 You are a helpful assistant that can interact with a computer.
-{collaboration_block}
-Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).
-Include a THOUGHT section before your command where you explain your reasoning process.
-Format your response as shown in <format_example>.
-
-<format_example>
-Your reasoning and analysis here. Explain why you want to perform the action.
-
-```bash
-your_command_here
-```
-</format_example>
-{collaboration_detail_block}
-Failure to follow these rules will cause your response to be rejected."""
+{collaboration_block}\
+"""
 
 COLLABORATION_INTRO = """\
 You are {agent_id} working as a team with: {agents_str}.
@@ -46,59 +34,61 @@ Submit when your feature is complete: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPU
 </collaboration>"""
 
 MESSAGING_SECTION = """\
-## Messaging (coordinate with teammates)
-Send messages to teammates. Messages appear in their next turn.
-```bash
-send_message <agent_name> "your message"
-```
+## Messaging
+Use the `send_message` tool with `recipient` and `content` arguments to coordinate with teammates.
 Messages from teammates appear as: [Message from <agent_name>]: ..."""
 
-# Instance template ported from mini.yaml
+# Instance template — v2 style (tool calling, not bash blocks)
 INSTANCE_TEMPLATE = """\
 Please solve this issue: {task}
 
 You can execute bash commands and edit files to implement the necessary changes.
-
+{collaboration_detail}
 ## Workflow
 
 1. Explore the codebase and find relevant files for your feature
-{messaging_workflow_step}3. Implement your changes
+{messaging_step}3. Implement your changes
 4. Test your changes work
 5. Submit: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`
    Do not combine the submit command with any other command. \
 <important>After this command, you cannot continue working on this task.</important>
 
-## Important Rules
+## Command Execution Rules
 
-1. Every response must contain exactly one action
-2. The action must be enclosed in triple backticks
-3. Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
-   However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or \
+You are operating in an environment where
+
+1. You issue at least one command
+2. The system executes the command(s) in a subshell
+3. You see the result(s)
+4. You write your next command(s)
+
+Each response should include:
+
+1. **Reasoning text** where you explain your analysis and plan
+2. At least one tool call with your command
+
+**CRITICAL REQUIREMENTS:**
+
+- Your response SHOULD include reasoning text explaining what you're doing
+- Your response MUST include AT LEAST ONE bash tool call
+- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
+- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or \
 write/load environment variables from files
+- Submit your changes and finish your work by issuing the following command: \
+`echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
+  Do not combine it with any other command. \
+<important>After this command, you cannot continue working on this task.</important>
 
 <system_information>
 {system} {release} {version} {machine}
-</system_information>
-
-## Formatting your response
-
-Here is an example of a correct response:
-
-<example_response>
-THOUGHT: I need to understand the structure of the repository first. \
-Let me check what files are in the current directory to get a better understanding of the codebase.
-
-```bash
-ls -la
-```
-</example_response>"""
+</system_information>"""
 
 
 class CooperBenchAgent:
-    """Agent for CooperBench coding tasks.
+    """Agent for CooperBench coding tasks using mini-swe-agent-v2 tool calling.
 
-    Renders system and instance prompts from CooperBench's templates,
-    with support for multi-agent collaboration via messaging.
+    Renders system and instance prompts from CooperBench's v2 templates,
+    with support for multi-agent collaboration via the send_message tool.
     """
 
     def __init__(
@@ -132,24 +122,16 @@ class CooperBenchAgent:
         is_collab = len(self.agents) > 1
 
         if is_collab:
-            messaging_line = "Use send_message to coordinate." if self.messaging_enabled else ""
+            messaging_line = "Use the send_message tool to coordinate with teammates." if self.messaging_enabled else ""
             collaboration_block = COLLABORATION_INTRO.format(
                 agent_id=self.agent_id,
                 agents_str=", ".join(self.agents),
                 messaging_line=messaging_line,
             )
-            messaging_section = MESSAGING_SECTION if self.messaging_enabled else ""
-            collaboration_detail_block = COLLABORATION_DETAIL.format(
-                messaging_section=messaging_section,
-            )
         else:
             collaboration_block = ""
-            collaboration_detail_block = ""
 
-        return SYSTEM_TEMPLATE.format(
-            collaboration_block=collaboration_block,
-            collaboration_detail_block=collaboration_detail_block,
-        )
+        return SYSTEM_TEMPLATE.format(collaboration_block=collaboration_block)
 
     @property
     def system_prompt(self) -> str:
@@ -177,15 +159,24 @@ class CooperBenchAgent:
         Returns:
             Rendered instance message content
         """
-        messaging_step = (
-            "2. Message teammates about which files you plan to modify\n"
-            if self.messaging_enabled and len(self.agents) > 1
-            else ""
-        )
+        is_collab = len(self.agents) > 1
+
+        if is_collab:
+            messaging_section = MESSAGING_SECTION if self.messaging_enabled else ""
+            collaboration_detail = COLLABORATION_DETAIL.format(messaging_section=messaging_section)
+            messaging_step = (
+                "2. Use the send_message tool to tell teammates which files you plan to modify\n"
+                if self.messaging_enabled
+                else ""
+            )
+        else:
+            collaboration_detail = ""
+            messaging_step = ""
 
         return INSTANCE_TEMPLATE.format(
             task=task_description,
-            messaging_workflow_step=messaging_step,
+            collaboration_detail=collaboration_detail,
+            messaging_step=messaging_step,
             system=platform.system(),
             release=platform.release(),
             version=platform.version(),

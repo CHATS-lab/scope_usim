@@ -1,7 +1,7 @@
-"""CooperBench sandbox using CooperBench's Modal backend.
+"""CooperBench sandbox using mini-swe-agent-v2's ModalEnvironment.
 
-Provides async command execution in a persistent Modal sandbox,
-wrapping CooperBench's synchronous ModalBackend with asyncio.to_thread.
+Uses cooperbench.agents.mini_swe_agent_v2.environments.modal.ModalEnvironment
+which provides retry logic, sandbox resurrection, and the v2 action dict interface.
 """
 
 import asyncio
@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 class CooperBenchSandbox:
-    """Async wrapper around CooperBench's ModalBackend for agent interaction.
+    """Async wrapper around mini-swe-agent-v2's ModalEnvironment.
 
-    Uses cooperbench.eval.backends.modal.ModalBackend to create a long-lived
-    Modal sandbox, then wraps the synchronous exec() calls with asyncio.to_thread
-    so they don't block the event loop.
+    ModalEnvironment creates a persistent Modal sandbox with retry logic
+    (up to 5 attempts, exponential backoff). We wrap its synchronous
+    execute() / cleanup() with asyncio.to_thread to avoid blocking the loop.
     """
 
     def __init__(
@@ -28,45 +28,34 @@ class CooperBenchSandbox:
         self.image_name = image_name
         self.cwd = cwd
         self.timeout = timeout
-        self._sandbox: Optional[Any] = None  # cooperbench ModalSandbox
+        self._env: Optional[Any] = None  # ModalEnvironment instance
         self._started = False
 
     async def start(self) -> None:
-        """Create the Modal sandbox via CooperBench's backend."""
+        """Create the Modal sandbox (blocking constructor, run in thread)."""
         if self._started:
             return
 
-        from cooperbench.eval.backends.modal import ModalBackend
+        from cooperbench.agents.mini_swe_agent_v2.environments.modal import ModalEnvironment
 
-        backend = ModalBackend(app_name="cooperbench-agent")
-        self._sandbox = await asyncio.to_thread(
-            backend.create_sandbox,
+        self._env = await asyncio.to_thread(
+            ModalEnvironment,
             image=self.image_name,
+            cwd=self.cwd,
             timeout=self.timeout,
-            workdir=self.cwd,
         )
         self._started = True
         logger.info(f"CooperBench sandbox started: image={self.image_name}")
 
     async def execute(self, command: str) -> Dict[str, Any]:
-        """Execute a bash command in the sandbox.
-
-        Returns:
-            Dict with 'output' (stdout+stderr) and 'returncode'
-        """
+        """Execute a bash command. Returns {'output', 'returncode'}."""
         if not self._started:
             await self.start()
 
-        result = await asyncio.to_thread(
-            self._sandbox.exec, "bash", "-c", command,
-        )
-        stdout = result.stdout_read()
-        stderr = result.stderr_read()
-        output = stdout + stderr if stderr else stdout
-
+        result = await asyncio.to_thread(self._env.execute, {"command": command})
         return {
-            "output": output,
-            "returncode": result.returncode,
+            "output": result.get("output", ""),
+            "returncode": result.get("returncode", -1),
         }
 
     async def get_patch(self) -> str:
@@ -78,10 +67,10 @@ class CooperBenchSandbox:
         return result.get("output", "")
 
     async def cleanup(self) -> None:
-        """Terminate the sandbox."""
-        if self._sandbox and self._started:
+        """Terminate the Modal sandbox."""
+        if self._env and self._started:
             try:
-                await asyncio.to_thread(self._sandbox.terminate)
+                await asyncio.to_thread(self._env.cleanup)
             except Exception as e:
                 logger.warning(f"Error terminating sandbox: {e}")
             self._started = False

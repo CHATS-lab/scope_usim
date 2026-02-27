@@ -274,10 +274,11 @@ async def _coop_single(
         partner_thread = threading.Thread(target=_run_partner, daemon=True)
         partner_thread.start()
 
-        # Create environment for trainable agent
+        # Create environment for trainable agent (with send_message tool enabled)
         environment = CooperBenchEnvironment(
             image_name=image_name,
             messaging=messaging,
+            messaging_enabled=True,
             timeout=3600,
         )
 

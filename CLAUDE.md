@@ -124,10 +124,11 @@ When `--usim-fixed-opponent-model` is set, the user simulator is passed to the G
 
 Key differences from `UserSimOrchestrator`:
 - No user simulator — only agent + environment (bash sandbox)
-- Agent responses parsed for bash code blocks via regex
-- Environment executes command, returns observation as "user" message
-- Incoming partner messages injected via messaging connector
-- Stop condition: `COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`
+- Agent responses parsed for structured tool calls (Qwen3 `<tool_call>` format, mini-swe-agent-v2)
+- `bash` tool calls execute commands; `send_message` tool calls deliver partner messages
+- Tool results returned as `role="tool"` messages with JSON content
+- `apply_chat_template` called with `tools=` for proper Qwen3 tool-call formatting
+- Stop condition: `COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` in bash command
 
 ### Backend Integration Pattern
 

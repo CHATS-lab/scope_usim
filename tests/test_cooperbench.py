@@ -158,7 +158,9 @@ class TestCooperBenchAgent:
         assert "agent1" in agent.system_prompt
         assert "agent2" in agent.system_prompt
         assert "send_message" in agent.system_prompt
-        assert "merge" in agent.system_prompt.lower()
+        # In v2, merge conflict info is in the instance template (not system prompt)
+        task_msg = agent.get_task_message("Implement feature X")
+        assert "merge" in task_msg.lower()
 
     def test_coop_no_messaging(self):
         agent = CooperBenchAgent(
