@@ -1,8 +1,10 @@
 """Training entry point for CooperBench with Slime backend.
 
-Trains coding agents to collaborate via RL using CooperBench benchmark.
-Agent (trainable, SGLang) learns to implement features while coordinating
-with a partner agent (fixed, API) to avoid merge conflicts.
+Trains coding agents via RL (GRPO) using CooperBench benchmark.
+Supports three settings:
+- baseline: 1 agent, 1 feature
+- solo: 1 agent, 2 features
+- coop: 2 agents (trainable + fixed partner), 1 feature each
 """
 
 import argparse
@@ -29,24 +31,33 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
     group.add_argument(
-        "--cooperbench-subset",
+        "--cooperbench-setting",
         type=str,
-        default=None,
-        help="CooperBench subset: lite, flash, or None for all",
+        default="solo",
+        choices=["baseline", "solo", "coop"],
+        help="Training setting: baseline (1 agent, 1 feature), "
+             "solo (1 agent, 2 features), coop (2 agents) (default: solo)",
     )
 
     group.add_argument(
-        "--cooperbench-repo",
+        "--cooperbench-data-dir",
         type=str,
         default=None,
-        help="Filter by repository name",
+        help="Path to usim/data/cooperbench/ directory with JSON files",
+    )
+
+    group.add_argument(
+        "--cooperbench-backend",
+        type=str,
+        default="modal",
+        help="CooperBench sandbox backend: modal, docker (default: modal)",
     )
 
     group.add_argument(
         "--cooperbench-partner-model",
         type=str,
         default="gpt-5-mini",
-        help="LLM model for the partner agent (default: gpt-5-mini)",
+        help="LLM model for the partner agent in coop mode (default: gpt-5-mini)",
     )
 
     group.add_argument(
@@ -60,21 +71,21 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> None:
         "--cooperbench-redis-url",
         type=str,
         default="redis://localhost:6379",
-        help="Redis URL for inter-agent messaging",
+        help="Redis URL for inter-agent messaging in coop mode",
     )
 
     group.add_argument(
         "--cooperbench-dataset-dir",
         type=str,
         default=None,
-        help="Path to CooperBench directory (with dataset/ subdirectory)",
+        help="Path to CooperBench repo (with dataset/ subdirectory) for eval",
     )
 
     group.add_argument(
         "--cooperbench-partial-reward",
         action="store_true",
         default=False,
-        help="Give 0.5 reward when agent's feature passes but merge fails",
+        help="Give 0.5 reward when agent's feature passes but merge fails (coop only)",
     )
 
 
@@ -91,25 +102,30 @@ def main() -> None:
 
     # Configure CooperBench rollout and data source
     args.rollout_function_path = (
-        args.rollout_function_path or "usim.cooperbench.rollout.cooperbench_generate_rollout"
+        args.rollout_function_path
+        or "usim.cooperbench.rollout.cooperbench_generate_rollout"
     )
     args.data_source_path = (
-        args.data_source_path or "usim.cooperbench.data_source.get_cooperbench_samples"
+        args.data_source_path
+        or "usim.cooperbench.data_source.get_cooperbench_data_source"
     )
+
+    setting = getattr(args, "cooperbench_setting", "solo")
 
     logger.info("=" * 60)
     logger.info("CooperBench Training Configuration")
     logger.info("=" * 60)
+    logger.info(f"Setting: {setting}")
     logger.info(f"Trainable role: {args.trainable_role}")
-    logger.info(f"Subset: {getattr(args, 'cooperbench_subset', None)}")
-    logger.info(f"Repo filter: {getattr(args, 'cooperbench_repo', None)}")
-    logger.info(f"Partner model: {getattr(args, 'cooperbench_partner_model', 'gpt-5-mini')}")
+    logger.info(f"Data dir: {getattr(args, 'cooperbench_data_dir', None)}")
+    logger.info(f"Backend: {getattr(args, 'cooperbench_backend', 'modal')}")
     logger.info(f"Max steps: {getattr(args, 'cooperbench_max_steps', 50)}")
-    logger.info(f"Redis URL: {getattr(args, 'cooperbench_redis_url', 'redis://localhost:6379')}")
+    if setting == "coop":
+        logger.info(f"Partner model: {getattr(args, 'cooperbench_partner_model', 'gpt-5-mini')}")
+        logger.info(f"Redis URL: {getattr(args, 'cooperbench_redis_url', 'redis://localhost:6379')}")
+        logger.info(f"Partial reward: {getattr(args, 'cooperbench_partial_reward', False)}")
     logger.info(f"Rollout function: {args.rollout_function_path}")
     logger.info(f"Data source: {args.data_source_path}")
-    logger.info("Agent (trainable): SGLang model")
-    logger.info(f"Partner (fixed): {getattr(args, 'cooperbench_partner_model', 'gpt-5-mini')}")
     logger.info("=" * 60)
 
     # Start training

@@ -106,6 +106,7 @@ class CooperBenchAgent:
         agent_id: str = "agent1",
         agents: Optional[List[str]] = None,
         messaging_enabled: bool = True,
+        setting: str = "coop",
     ):
         """Initialize the CooperBench agent.
 
@@ -113,10 +114,17 @@ class CooperBenchAgent:
             agent_id: This agent's unique identifier
             agents: List of all agent IDs (for collaboration)
             messaging_enabled: Whether messaging is enabled
+            setting: Training setting — "baseline", "solo", or "coop"
         """
         self.agent_id = agent_id
-        self.agents = agents or [agent_id]
-        self.messaging_enabled = messaging_enabled
+        self.setting = setting
+        # For baseline/solo, disable collaboration (single agent)
+        if setting in ("baseline", "solo"):
+            self.agents = [agent_id]
+            self.messaging_enabled = False
+        else:
+            self.agents = agents or [agent_id]
+            self.messaging_enabled = messaging_enabled
         self._system_prompt = self._render_system_prompt()
 
     def _render_system_prompt(self) -> str:
@@ -183,6 +191,21 @@ class CooperBenchAgent:
             version=platform.version(),
             machine=platform.machine(),
         )
+
+    def get_solo_task_message(self, descriptions: Dict[str, str]) -> str:
+        """Render a combined task message for solo setting (both features).
+
+        Args:
+            descriptions: Dict mapping feature_id (str) to description text
+
+        Returns:
+            Rendered instance message with both features combined
+        """
+        combined = []
+        for fid in sorted(descriptions.keys(), key=str):
+            combined.append(f"## Feature {fid}\n\n{descriptions[fid]}")
+        task_text = "\n\n---\n\n".join(combined)
+        return self.get_task_message(task_text)
 
     def build_messages(self, state: AgentState) -> List[Dict[str, Any]]:
         """Build messages for LLM generation."""
