@@ -55,7 +55,7 @@ class CooperBenchSandbox:
         result = await asyncio.to_thread(self._env.execute, {"command": command})
         return {
             "output": result.get("output", ""),
-            "returncode": result.get("returncode", -1),
+            "returncode": result.get("returncode", 0),
         }
 
     async def get_patch(self) -> str:
