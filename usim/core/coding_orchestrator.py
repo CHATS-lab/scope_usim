@@ -11,8 +11,10 @@ in a sandbox environment.
 
 import json
 import logging
-import re
 from typing import Any, Dict, List, Optional, Tuple
+
+from sglang.srt.function_call.function_call_parser import FunctionCallParser
+from sglang.srt.managers.io_struct import Function, Tool
 
 from usim.core.model_adapter import ModelAdapter
 from usim.core.types import (
@@ -28,13 +30,15 @@ logger = logging.getLogger(__name__)
 
 STOP_SIGNAL = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
 
-# Qwen3-style tool call pattern: <tool_call>{...}</tool_call>
-TOOL_CALL_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
 
+def _parse_tool_calls(
+    response_text: str,
+    tools_schema: List[Dict[str, Any]],
+    tool_call_parser: str = "qwen",
+) -> Dict[str, Any]:
+    """Parse tool calls from agent response using sglang's FunctionCallParser.
 
-def _parse_tool_calls(response_text: str) -> Dict[str, Any]:
-    """Parse Qwen3-style tool calls from agent response.
-
+    Supports any model format via tool_call_parser ("qwen", "hermes", "llama3", etc.).
     Returns {"normal_text": str, "calls": list} where each call is
     {"name": str, "arguments": dict, "id": str}.
     """
@@ -42,26 +46,43 @@ def _parse_tool_calls(response_text: str) -> Dict[str, Any]:
         response_text = response_text[:-10]
     response_text = response_text.strip()
 
-    calls = []
-    for i, match in enumerate(TOOL_CALL_RE.finditer(response_text)):
-        try:
-            data = json.loads(match.group(1))
-            args = data.get("arguments", {})
+    if not tools_schema:
+        return {"normal_text": response_text, "calls": []}
+
+    try:
+        tools_list = [
+            Tool(
+                function=Function(
+                    name=t["function"]["name"],
+                    description=t["function"]["description"],
+                    parameters=t["function"]["parameters"],
+                ),
+                type=t["type"],
+            )
+            for t in tools_schema
+        ]
+        parser = FunctionCallParser(tools=tools_list, tool_call_parser=tool_call_parser)
+        normal_text, calls = parser.parse_non_stream(response_text)
+
+        normalized = []
+        for call in calls:
+            call_dict = call.model_dump()
+            args = call_dict.get("parameters", call_dict.get("arguments", {}))
             if isinstance(args, str):
                 try:
                     args = json.loads(args)
                 except (json.JSONDecodeError, TypeError):
                     args = {}
-            calls.append({
-                "name": data.get("name", ""),
+            normalized.append({
+                "name": call_dict.get("name", ""),
                 "arguments": args,
-                "id": data.get("id", f"call_{i}"),
+                "id": call_dict.get("id", ""),
             })
-        except (json.JSONDecodeError, KeyError):
-            continue
 
-    normal_text = TOOL_CALL_RE.sub("", response_text).strip()
-    return {"normal_text": normal_text, "calls": calls}
+        return {"normal_text": normal_text, "calls": normalized}
+    except Exception as e:
+        logger.warning(f"Tool call parsing failed: {e}")
+        return {"normal_text": response_text, "calls": []}
 
 
 def _format_tool_observation(
@@ -102,6 +123,9 @@ class CodingAgentOrchestrator:
     - send_message tool calls delivered via messaging connector
     - Stop condition: COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT in bash command
 
+    Tool call parsing uses sglang's FunctionCallParser with a configurable
+    tool_call_parser name ("qwen", "hermes", "llama3", etc.) — model-agnostic.
+
     Token Tracking (spare convention):
         - all_tokens: ALL tokens (prompt + all responses)
         - all_masks: loss masks for response tokens only (excludes prompt)
@@ -115,6 +139,7 @@ class CodingAgentOrchestrator:
         config: UserSimConfig,
         environment: Any,
         messaging: Optional[Any] = None,
+        tool_call_parser: str = "qwen",
     ):
         """Initialize the coding orchestrator.
 
@@ -123,11 +148,14 @@ class CodingAgentOrchestrator:
             config: Configuration (max_turns used as max_steps)
             environment: CooperBenchEnvironment with execute_command() and get_tools()
             messaging: Optional MessagingConnector for inter-agent communication
+            tool_call_parser: sglang parser name for the model's tool call format.
+                "qwen" for Qwen3, "hermes" for Hermes/Mistral, "llama3" for Llama 3.1+.
         """
         self.agent_model = agent_model
         self.config = config
         self.env = environment
         self.messaging = messaging
+        self.tool_call_parser = tool_call_parser
         self._tools_schema = environment.get_tools()
 
     async def run_session(
@@ -193,7 +221,7 @@ class CodingAgentOrchestrator:
                 break
 
             response_text = results[0]["text"]
-            parsed = _parse_tool_calls(response_text)
+            parsed = _parse_tool_calls(response_text, self._tools_schema, self.tool_call_parser)
 
             if not parsed["calls"]:
                 # Format error — no tool call found; add plain assistant message + error

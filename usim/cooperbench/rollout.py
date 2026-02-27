@@ -61,6 +61,7 @@ async def _baseline_single(
         max_steps = getattr(args, "cooperbench_max_steps", 50)
         dataset_dir = getattr(args, "cooperbench_dataset_dir", None)
         backend = getattr(args, "cooperbench_backend", "modal")
+        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen")
 
         # Create environment
         environment = CooperBenchEnvironment(image_name=image_name, timeout=3600)
@@ -94,6 +95,7 @@ async def _baseline_single(
             agent_model=model_adapter,
             config=config,
             environment=environment,
+            tool_call_parser=tool_call_parser,
         )
 
         trajectory = await orchestrator.run_session(task, agent)
@@ -148,6 +150,7 @@ async def _solo_single(
         max_steps = getattr(args, "cooperbench_max_steps", 50)
         dataset_dir = getattr(args, "cooperbench_dataset_dir", None)
         backend = getattr(args, "cooperbench_backend", "modal")
+        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen")
         f1_id, f2_id = feature_ids
 
         # Create environment
@@ -177,6 +180,7 @@ async def _solo_single(
             agent_model=model_adapter,
             config=config,
             environment=environment,
+            tool_call_parser=tool_call_parser,
         )
 
         trajectory = await orchestrator.run_session(task, agent)
@@ -240,6 +244,7 @@ async def _coop_single(
         dataset_dir = getattr(args, "cooperbench_dataset_dir", None)
         backend = getattr(args, "cooperbench_backend", "modal")
         partial_reward = getattr(args, "cooperbench_partial_reward", False)
+        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen")
         f1_id, f2_id = feature_ids
 
         # Create unique run ID for Redis namespacing
@@ -315,6 +320,7 @@ async def _coop_single(
             config=config,
             environment=environment,
             messaging=messaging,
+            tool_call_parser=tool_call_parser,
         )
 
         trajectory = await orchestrator.run_session(task, agent)
