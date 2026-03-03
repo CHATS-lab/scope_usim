@@ -92,6 +92,25 @@ def add_usim_arguments(parser: argparse.ArgumentParser) -> None:
         help="Environment variable name for fixed user sim API key",
     )
 
+    group.add_argument(
+        "--trajectory-output-dir",
+        type=str,
+        default=None,
+        help="Directory to save trajectory JSONL files (disabled if not set)",
+    )
+    group.add_argument(
+        "--docent-collection",
+        type=str,
+        default=None,
+        help="Docent collection name; enables upload when set (requires docent-python)",
+    )
+    group.add_argument(
+        "--docent-upload-interval",
+        type=int,
+        default=1,
+        help="Upload to Docent every N rollouts (default: 1)",
+    )
+
     return parser
 
 

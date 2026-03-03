@@ -96,6 +96,19 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> None:
              "qwen (Qwen3), hermes (Hermes/Mistral), llama3 (Llama 3.1+) (default: qwen)",
     )
 
+    group.add_argument(
+        "--docent-collection",
+        type=str,
+        default=None,
+        help="Docent collection name; enables upload when set (requires docent-python)",
+    )
+    group.add_argument(
+        "--docent-upload-interval",
+        type=int,
+        default=1,
+        help="Upload to Docent every N rollouts (default: 1)",
+    )
+
 
 def main() -> None:
     """Main entry point for CooperBench training with Slime."""
