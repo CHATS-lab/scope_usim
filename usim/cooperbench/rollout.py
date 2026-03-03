@@ -35,6 +35,7 @@ from usim.core.environment.cooperbench.messaging import MessagingConnector
 from usim.core.types import TrainableRole, UserSimConfig
 from usim.slime.model_adapter import create_slime_model_adapter
 from usim.slime.trajectory_converter import trajectory_to_slime_sample
+from usim.utils.docent import get_docent_uploader
 
 logger = logging.getLogger(__name__)
 
@@ -440,6 +441,12 @@ def cooperbench_generate_rollout(
     grouped_results = asyncio.run(_run_batch_async(args, samples))
 
     metrics = _compute_rollout_metrics(grouped_results, rollout_id, prefix="CB")
+
+    # Upload to Docent (non-blocking)
+    docent_uploader = get_docent_uploader(args)
+    if docent_uploader:
+        all_samples = [s for group in grouped_results for s in group]
+        docent_uploader.upload_batch(all_samples, rollout_id)
 
     return RolloutFnTrainOutput(samples=grouped_results, metrics=metrics)
 

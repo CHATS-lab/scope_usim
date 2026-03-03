@@ -24,6 +24,7 @@ from usim.core.trajectory_recorder import TrajectoryRecorder
 from usim.core.types import TrainableRole, UserSimConfig
 from usim.p4g.persona import PersonaLoader
 from usim.slime.trajectory_converter import trajectory_to_slime_sample
+from usim.utils.docent import get_docent_uploader
 
 
 logger = logging.getLogger(__name__)
@@ -322,11 +323,16 @@ def p4g_generate_rollout(
     metrics = _compute_rollout_metrics(grouped_results, rollout_id, prefix="P4G")
 
     # Record trajectories to JSONL
+    all_samples = [s for group in grouped_results for s in group]
     output_dir = getattr(args, "trajectory_output_dir", None)
     if output_dir:
         recorder = TrajectoryRecorder(output_dir)
-        all_samples = [s for group in grouped_results for s in group]
         recorder.record_batch(all_samples, rollout_id)
+
+    # Upload to Docent (non-blocking)
+    docent_uploader = get_docent_uploader(args)
+    if docent_uploader:
+        docent_uploader.upload_batch(all_samples, rollout_id)
 
     return RolloutFnTrainOutput(samples=grouped_results, metrics=metrics)
 
@@ -435,4 +441,16 @@ def add_p4g_arguments(parser: Any) -> None:
         type=str,
         default=None,
         help="Directory to save trajectory JSONL files (disabled if not set)",
+    )
+    group.add_argument(
+        "--docent-collection",
+        type=str,
+        default=None,
+        help="Docent collection name; enables upload when set (requires docent-python)",
+    )
+    group.add_argument(
+        "--docent-upload-interval",
+        type=int,
+        default=1,
+        help="Upload to Docent every N rollouts (default: 1)",
     )

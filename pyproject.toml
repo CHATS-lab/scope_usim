@@ -55,6 +55,11 @@ cooperbench = [
   "redis>=5.0.0",
 ]
 
+# Docent integration (trajectory analysis)
+docent = [
+  "docent-python>=0.1.0",
+]
+
 # Development dependencies
 dev = [
   "pytest>=7.0.0",
@@ -67,7 +72,7 @@ dev = [
 
 # All optional dependencies
 all = [
-  "usim[slime,tinker,tau2,cooperbench]",
+  "usim[slime,tinker,tau2,cooperbench,docent]",
 ]
 
 # Full development setup
