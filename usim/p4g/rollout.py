@@ -20,6 +20,7 @@ from slime.utils.types import Sample
 
 from usim.core.environment.p4g import P4gEnvironment
 from usim.core.orchestrator import UserSimOrchestrator
+from usim.core.rollout_metrics import compute_rollout_metrics
 from usim.core.trajectory_recorder import TrajectoryRecorder
 from usim.core.types import TrainableRole, UserSimConfig
 from usim.p4g.persona import PersonaLoader
@@ -320,7 +321,7 @@ def p4g_generate_rollout(
     grouped_results = asyncio.run(_run_batch_async(args, samples))
 
     # Compute rollout metrics
-    metrics = _compute_rollout_metrics(grouped_results, rollout_id, prefix="P4G")
+    metrics = compute_rollout_metrics(grouped_results, rollout_id, prefix="P4G")
 
     # Record trajectories to JSONL
     all_samples = [s for group in grouped_results for s in group]
@@ -335,73 +336,6 @@ def p4g_generate_rollout(
         docent_uploader.upload_batch(all_samples, rollout_id)
 
     return RolloutFnTrainOutput(samples=grouped_results, metrics=metrics)
-
-
-def _compute_rollout_metrics(
-    grouped_results: List[List[Sample]],
-    rollout_id: int,
-    prefix: str = "P4G",
-) -> dict:
-    """Compute and log rollout metrics including per-sample debug info."""
-    import numpy as np
-
-    all_samples = [s for group in grouped_results for s in group]
-    rewards = [s.reward for s in all_samples if s.reward is not None]
-    turn_counts = [
-        s.metadata.get("turn_count", 0) for s in all_samples if hasattr(s, "metadata") and s.metadata
-    ]
-    response_lengths = [s.response_length for s in all_samples]
-    truncated = [s.status == Sample.Status.TRUNCATED for s in all_samples]
-    failed = [s.status == Sample.Status.FAILED for s in all_samples]
-
-    zero_std_groups = 0
-    for group in grouped_results:
-        group_rewards = [s.reward for s in group if s.reward is not None]
-        if len(group_rewards) >= 2:
-            std = float(np.std(group_rewards))
-            if std == 0.0:
-                zero_std_groups += 1
-
-    num_groups = len(grouped_results)
-    zero_std_pct = zero_std_groups / max(num_groups, 1)
-
-    metrics = {
-        "rollout/num_samples": len(all_samples),
-        "rollout/num_groups": num_groups,
-        "rollout/raw_reward/mean": float(np.mean(rewards)) if rewards else 0.0,
-        "rollout/raw_reward/std": float(np.std(rewards)) if rewards else 0.0,
-        "rollout/raw_reward/min": float(np.min(rewards)) if rewards else 0.0,
-        "rollout/raw_reward/max": float(np.max(rewards)) if rewards else 0.0,
-        "rollout/turn_count/mean": float(np.mean(turn_counts)) if turn_counts else 0.0,
-        "rollout/turn_count/max": int(np.max(turn_counts)) if turn_counts else 0,
-        "rollout/response_len/mean": float(np.mean(response_lengths)) if response_lengths else 0.0,
-        "rollout/truncated_ratio": float(np.mean(truncated)) if truncated else 0.0,
-        "rollout/failed_ratio": float(np.mean(failed)) if failed else 0.0,
-        "rollout/zero_std_group_pct": zero_std_pct,
-    }
-
-    logger.info(
-        f"[{prefix}] Rollout {rollout_id}: "
-        f"{len(all_samples)} samples in {num_groups} groups | "
-        f"reward={metrics['rollout/raw_reward/mean']:.3f}+-{metrics['rollout/raw_reward/std']:.3f} "
-        f"[{metrics['rollout/raw_reward/min']:.3f}, {metrics['rollout/raw_reward/max']:.3f}] | "
-        f"turns={metrics['rollout/turn_count/mean']:.1f} (max={metrics['rollout/turn_count/max']}) | "
-        f"resp_len={metrics['rollout/response_len/mean']:.0f} | "
-        f"truncated={metrics['rollout/truncated_ratio']:.1%} | "
-        f"failed={metrics['rollout/failed_ratio']:.1%} | "
-        f"zero_std_groups={zero_std_pct:.1%} ({zero_std_groups}/{num_groups})"
-    )
-
-    for i, s in enumerate(all_samples[:3]):
-        meta = s.metadata or {}
-        logger.info(
-            f"[{prefix}] Sample {s.index}: "
-            f"reward={s.reward:.3f}, turns={meta.get('turn_count', '?')}, "
-            f"tokens={len(s.tokens)}, resp_len={s.response_length}, "
-            f"status={s.status}, response={s.response[:100]}..."
-        )
-
-    return metrics
 
 
 def add_p4g_arguments(parser: Any) -> None:
