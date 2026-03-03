@@ -4,6 +4,7 @@ This module defines the data structures used throughout the usim package.
 These types are framework-agnostic and can be used with any RL backend.
 """
 
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -115,7 +116,7 @@ class Message:
                     "type": "function",
                     "function": {
                         "name": tc.name,
-                        "arguments": tc.arguments if isinstance(tc.arguments, str) else str(tc.arguments),
+                        "arguments": tc.arguments if isinstance(tc.arguments, str) else json.dumps(tc.arguments),
                     },
                 }
                 for tc in self.tool_calls

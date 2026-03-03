@@ -158,7 +158,9 @@ class TestCooperBenchAgent:
         assert "agent1" in agent.system_prompt
         assert "agent2" in agent.system_prompt
         assert "send_message" in agent.system_prompt
-        assert "merge" in agent.system_prompt.lower()
+        # In v2, merge conflict info is in the instance template (not system prompt)
+        task_msg = agent.get_task_message("Implement feature X")
+        assert "merge" in task_msg.lower()
 
     def test_coop_no_messaging(self):
         agent = CooperBenchAgent(
@@ -172,6 +174,10 @@ class TestCooperBenchAgent:
         msg = agent.get_task_message("Implement feature X")
         assert "Implement feature X" in msg
         assert "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" in msg
+        # Non-collab uses "Recommended Workflow" (from mini.yaml)
+        assert "Recommended Workflow" in msg
+        assert "example_response" in msg
+        assert "Useful command examples" in msg
 
     def test_solo_task_message_combines_features_sorted(self):
         agent = CooperBenchAgent(setting="solo")

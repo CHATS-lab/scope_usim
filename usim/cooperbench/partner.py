@@ -66,8 +66,8 @@ def run_partner_agent(
         if agents is None:
             agents = ["agent1", "agent2"]
 
-        # Run via CooperBench's agent adapter
-        runner = get_runner("mini_swe_agent")
+        # Run via CooperBench's agent adapter (v2 tool-calling protocol)
+        runner = get_runner("mini_swe_agent_v2")
         result = runner.run(
             task=task,
             image=image,

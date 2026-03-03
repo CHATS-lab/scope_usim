@@ -1,21 +1,25 @@
-"""Orchestrator for Agent <-> Environment coding loops.
+"""Orchestrator for Agent <-> Environment coding loops using tool calling.
 
 Unlike UserSimOrchestrator (agent <-> user_sim conversation), this orchestrator
-manages agent <-> environment loops where every agent response contains a bash
-command, and the environment executes it and returns an observation.
+manages agent <-> environment loops following mini-swe-agent-v2 protocol:
+every agent response contains structured tool calls (bash + optional send_message),
+and the environment executes them and returns JSON-formatted observations.
 
 Used for CooperBench coding tasks where the agent implements features
 in a sandbox environment.
 """
 
+import json
 import logging
-import re
 from typing import Any, Dict, List, Optional, Tuple
+
+from sglang.srt.function_call.function_call_parser import FunctionCallParser
+from sglang.srt.managers.io_struct import Function, Tool
 
 from usim.core.model_adapter import ModelAdapter
 from usim.core.types import (
-    AgentState,
     Message,
+    ToolCall,
     Trajectory,
     TrajectoryStatus,
     TrainableRole,
@@ -24,28 +28,109 @@ from usim.core.types import (
 
 logger = logging.getLogger(__name__)
 
-# Regex patterns for parsing agent responses
-BASH_BLOCK_RE = re.compile(r"```bash\s*\n(.*?)\n```", re.DOTALL)
-SEND_MESSAGE_RE = re.compile(r'send_message\s+(\w+)\s+"([^"]*)"')
 STOP_SIGNAL = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
 
 
+def _parse_tool_calls(
+    response_text: str,
+    tools_schema: List[Dict[str, Any]],
+    tool_call_parser: str = "glm",
+) -> Dict[str, Any]:
+    """Parse tool calls from agent response using sglang's FunctionCallParser.
+
+    Supports any model format via tool_call_parser ("qwen", "hermes", "llama3", etc.).
+    Returns {"normal_text": str, "calls": list} where each call is
+    {"name": str, "arguments": dict, "id": str}.
+    """
+    if response_text.endswith("<|im_end|>"):
+        response_text = response_text[:-10]
+    response_text = response_text.strip()
+
+    if not tools_schema:
+        return {"normal_text": response_text, "calls": []}
+
+    try:
+        tools_list = [
+            Tool(
+                function=Function(
+                    name=t["function"]["name"],
+                    description=t["function"]["description"],
+                    parameters=t["function"]["parameters"],
+                ),
+                type=t["type"],
+            )
+            for t in tools_schema
+        ]
+        parser = FunctionCallParser(tools=tools_list, tool_call_parser=tool_call_parser)
+        normal_text, calls = parser.parse_non_stream(response_text)
+
+        normalized = []
+        for call in calls:
+            call_dict = call.model_dump()
+            args = call_dict.get("parameters", call_dict.get("arguments", {}))
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except (json.JSONDecodeError, TypeError):
+                    args = {}
+            normalized.append({
+                "name": call_dict.get("name", ""),
+                "arguments": args,
+                "id": call_dict.get("id", ""),
+            })
+
+        return {"normal_text": normal_text, "calls": normalized}
+    except Exception as e:
+        logger.warning(f"Tool call parsing failed: {e}")
+        return {"normal_text": response_text, "calls": []}
+
+
+def _format_tool_observation(
+    output: str,
+    returncode: int,
+    incoming_messages: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """Format command output as JSON tool result (v2 observation_template format)."""
+    max_output_len = 10000
+
+    if len(output) < max_output_len:
+        obs: Dict[str, Any] = {"returncode": returncode, "output": output}
+    else:
+        obs = {
+            "returncode": returncode,
+            "output_head": output[:5000],
+            "output_tail": output[-5000:],
+            "elided_chars": len(output) - max_output_len,
+            "warning": "Output too long.",
+        }
+
+    if incoming_messages:
+        obs["partner_messages"] = [
+            {"from": m.get("from", "partner"), "content": m.get("content", "")}
+            for m in incoming_messages
+        ]
+
+    return json.dumps(obs)
+
+
 class CodingAgentOrchestrator:
-    """Orchestrator for Agent <-> Environment coding sessions.
+    """Orchestrator for Agent <-> Environment coding sessions using tool calling.
 
     Key differences from UserSimOrchestrator:
     - No user simulator — only agent + environment (bash sandbox)
-    - Every agent response contains a bash command (parsed via regex)
-    - Environment executes command, returns observation as "user" message
-    - Incoming partner messages injected as additional context
-    - send_message calls parsed and delivered via messaging connector
-    - Stop condition: COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT in command text
+    - Agent responses parsed for structured tool calls (Qwen3 <tool_call> format)
+    - Environment executes bash commands, returns JSON observations as role="tool" messages
+    - send_message tool calls delivered via messaging connector
+    - Stop condition: COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT in bash command
+
+    Tool call parsing uses sglang's FunctionCallParser with a configurable
+    tool_call_parser name ("qwen", "hermes", "llama3", etc.) — model-agnostic.
 
     Token Tracking (spare convention):
         - all_tokens: ALL tokens (prompt + all responses)
         - all_masks: loss masks for response tokens only (excludes prompt)
         - all_logprobs: log probs for response tokens only
-        - Agent (assistant) tokens get mask=1, environment (user) tokens get mask=0
+        - Agent (assistant) tokens get mask=1, environment (tool) tokens get mask=0
     """
 
     def __init__(
@@ -54,19 +139,24 @@ class CodingAgentOrchestrator:
         config: UserSimConfig,
         environment: Any,
         messaging: Optional[Any] = None,
+        tool_call_parser: str = "glm",
     ):
         """Initialize the coding orchestrator.
 
         Args:
             agent_model: ModelAdapter for agent generation (trainable, SGLang)
             config: Configuration (max_turns used as max_steps)
-            environment: CooperBenchEnvironment with execute_command()
+            environment: CooperBenchEnvironment with execute_command() and get_tools()
             messaging: Optional MessagingConnector for inter-agent communication
+            tool_call_parser: sglang parser name for the model's tool call format.
+                "qwen" for Qwen3, "hermes" for Hermes/Mistral, "llama3" for Llama 3.1+.
         """
         self.agent_model = agent_model
         self.config = config
         self.env = environment
         self.messaging = messaging
+        self.tool_call_parser = tool_call_parser
+        self._tools_schema = environment.get_tools()
 
     async def run_session(
         self,
@@ -82,7 +172,6 @@ class CodingAgentOrchestrator:
         Returns:
             Trajectory with all tokens, loss masks, and logprobs for training
         """
-        # Initialize agent state
         agent_state = agent.get_init_state()
 
         # Token tracking (spare convention: masks/logprobs exclude prompt)
@@ -91,9 +180,9 @@ class CodingAgentOrchestrator:
         all_logprobs: List[float] = []
         messages: List[Dict[str, Any]] = []
 
-        # Get initial prompt tokens from agent's system + task messages
+        # Get initial prompt tokens from agent's system message (with tool definitions)
         initial_messages = [msg.to_dict() for msg in agent_state.system_messages]
-        prompt_tokens = self._tokenize_messages(initial_messages, self.agent_model)
+        prompt_tokens = self._tokenize_messages(initial_messages)
         all_tokens.extend(prompt_tokens)
 
         # Add task description as first user message
@@ -103,14 +192,14 @@ class CodingAgentOrchestrator:
         messages.append(task_msg.to_dict())
 
         # Track task message tokens (not trainable)
-        task_delta, task_mask = self._get_token_delta(messages, self.agent_model, "user")
+        task_delta, task_mask = self._get_token_delta(messages, "user")
         all_tokens.extend(task_delta)
         all_masks.extend(task_mask)
         all_logprobs.extend([0.0] * len(task_delta))
 
         # Main coding loop
         step_count = 0
-        max_steps = self.config.max_turns  # Reuse max_turns as max_steps
+        max_steps = self.config.max_turns
         status = TrajectoryStatus.TRUNCATED
 
         for step in range(max_steps):
@@ -132,81 +221,111 @@ class CodingAgentOrchestrator:
                 break
 
             response_text = results[0]["text"]
-            agent_msg, agent_state = agent.parse_response(response_text, agent_state)
-            messages.append(agent_msg.to_dict())
+            parsed = _parse_tool_calls(response_text, self._tools_schema, self.tool_call_parser)
+
+            if not parsed["calls"]:
+                # Format error — no tool call found; add plain assistant message + error
+                asst_msg = Message(role="assistant", content=response_text)
+                agent_state = agent_state.add_message(asst_msg)
+                messages.append(asst_msg.to_dict())
+
+                asst_delta, asst_mask = self._get_token_delta(messages, "assistant")
+                agent_logprobs = self._extract_logprobs(results, len(asst_delta))
+                all_tokens.extend(asst_delta)
+                all_masks.extend(asst_mask)
+                all_logprobs.extend(agent_logprobs)
+
+                error_content = (
+                    "Tool call error:\n\n<error>\n"
+                    "No tool calls found in the response. Every response MUST include at least one tool call.\n"
+                    "</error>\n\n"
+                    "Here is general guidance on how to submit correct toolcalls:\n\n"
+                    "Every response needs to use the 'bash' tool at least once to execute commands.\n\n"
+                    "Call the bash tool with your command as the argument:\n"
+                    "- Tool: bash\n"
+                    '- Arguments: {"command": "your_command_here"}\n\n'
+                    f"If you want to end the task, please issue the following command: `echo {STOP_SIGNAL}`\n"
+                    "without any other command."
+                )
+                err_msg = Message(role="user", content=error_content)
+                agent_state = agent_state.add_message(err_msg)
+                messages.append(err_msg.to_dict())
+
+                err_delta, err_mask = self._get_token_delta(messages, "user")
+                all_tokens.extend(err_delta)
+                all_masks.extend(err_mask)
+                all_logprobs.extend([0.0] * len(err_delta))
+                continue
+
+            # Build assistant message with tool_calls
+            tool_calls = [
+                ToolCall(
+                    id=call.get("id", f"call_{step}_{i}"),
+                    name=call["name"],
+                    arguments=call["arguments"],
+                )
+                for i, call in enumerate(parsed["calls"])
+            ]
+            normal_text = parsed["normal_text"] or None
+            asst_msg = Message(role="assistant", content=normal_text, tool_calls=tool_calls)
+            agent_state = agent_state.add_message(asst_msg)
+            messages.append(asst_msg.to_dict())
 
             # Track agent tokens (mask=1, trainable)
-            agent_delta, agent_mask = self._get_token_delta(
-                messages, self.agent_model, "assistant"
-            )
+            agent_delta, agent_mask = self._get_token_delta(messages, "assistant")
             agent_logprobs = self._extract_logprobs(results, len(agent_delta))
             all_tokens.extend(agent_delta)
             all_masks.extend(agent_mask)
             all_logprobs.extend(agent_logprobs)
 
-            # Parse bash command from response
-            bash_match = BASH_BLOCK_RE.search(response_text)
-            if not bash_match:
-                # Format error — no bash block found
-                error_content = (
-                    "Please always provide EXACTLY ONE action in triple backticks.\n"
-                    "If you want to end the task, please issue the following command: "
-                    "`echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\n"
-                )
-                error_msg = Message(role="user", content=error_content)
-                agent_state = agent_state.add_message(error_msg)
-                messages.append(error_msg.to_dict())
+            # === ENVIRONMENT TURN: execute tool calls ===
+            stop = False
+            for i, call in enumerate(parsed["calls"]):
+                name = call["name"]
+                args = call["arguments"]
+                call_id = tool_calls[i].id
 
-                error_delta, error_mask = self._get_token_delta(
-                    messages, self.agent_model, "user"
-                )
-                all_tokens.extend(error_delta)
-                all_masks.extend(error_mask)
-                all_logprobs.extend([0.0] * len(error_delta))
-                continue
+                if name == "bash":
+                    command = args.get("command", "").strip() if isinstance(args, dict) else ""
+                    if STOP_SIGNAL in command:
+                        stop = True
+                        tool_content = json.dumps({"returncode": 0, "output": STOP_SIGNAL})
+                    else:
+                        exec_result = await self.env.execute_command(command)
+                        incoming_msgs = self.messaging.receive() if self.messaging else []
+                        tool_content = _format_tool_observation(
+                            exec_result["output"],
+                            exec_result["returncode"],
+                            incoming_msgs if incoming_msgs else None,
+                        )
 
-            command = bash_match.group(1).strip()
+                elif name == "send_message":
+                    recipient = args.get("recipient", "") if isinstance(args, dict) else ""
+                    content = args.get("content", "") if isinstance(args, dict) else ""
+                    if self.messaging:
+                        self.messaging.send(recipient, content)
+                        logger.debug(f"Sent message to {recipient}: {content[:50]}...")
+                    tool_content = json.dumps({"status": "sent"})
 
-            # Parse and deliver send_message calls
-            if self.messaging:
-                for match in SEND_MESSAGE_RE.finditer(command):
-                    recipient, content = match.groups()
-                    self.messaging.send(recipient, content)
-                    logger.debug(f"Sent message to {recipient}: {content[:50]}...")
-                # Strip send_message calls from command before execution
-                command = SEND_MESSAGE_RE.sub("", command).strip()
+                else:
+                    tool_content = json.dumps({"error": f"Unknown tool: {name}"})
 
-            # Check for stop signal
-            if STOP_SIGNAL in command:
+                tool_msg = Message(role="tool", tool_call_id=call_id, content=tool_content)
+                agent_state = agent_state.add_message(tool_msg)
+                messages.append(tool_msg.to_dict())
+
+                # Track tool tokens (mask=0, not trainable)
+                tool_delta, tool_mask_vals = self._get_token_delta(messages, "tool")
+                all_tokens.extend(tool_delta)
+                all_masks.extend(tool_mask_vals)
+                all_logprobs.extend([0.0] * len(tool_delta))
+
+                if stop:
+                    break
+
+            if stop:
                 status = TrajectoryStatus.COMPLETED
                 break
-
-            # === ENVIRONMENT TURN: execute command ===
-            exec_result = await self.env.execute_command(command)
-
-            # Check for incoming messages from partner
-            incoming_msgs = []
-            if self.messaging:
-                incoming_msgs = self.messaging.receive()
-
-            # Format observation
-            observation = _format_observation(
-                exec_result["output"],
-                exec_result["returncode"],
-                incoming_msgs,
-            )
-
-            obs_msg = Message(role="user", content=observation)
-            agent_state = agent_state.add_message(obs_msg)
-            messages.append(obs_msg.to_dict())
-
-            # Track environment tokens (mask=0, not trainable)
-            obs_delta, obs_mask = self._get_token_delta(
-                messages, self.agent_model, "user"
-            )
-            all_tokens.extend(obs_delta)
-            all_masks.extend(obs_mask)
-            all_logprobs.extend([0.0] * len(obs_delta))
 
         # Signal session end
         agent.stop(
@@ -218,11 +337,11 @@ class CodingAgentOrchestrator:
             all_tokens, all_masks, all_logprobs, messages, step_count, task, status,
         )
 
-    # === Helper methods (shared patterns from UserSimOrchestrator) ===
+    # === Helper methods ===
 
     def _compute_loss_mask_for_role(self, role: str) -> int:
         """Determine if tokens from this role should be trained."""
-        if role == "tool" or role == "system":
+        if role in ("tool", "system"):
             return 0
         trainable = self.config.trainable_role
         if trainable == TrainableRole.BOTH:
@@ -236,34 +355,48 @@ class CodingAgentOrchestrator:
     def _get_token_delta(
         self,
         messages: List[Dict[str, Any]],
-        model: ModelAdapter,
         role: str,
     ) -> Tuple[List[int], List[int]]:
         """Calculate token delta for the last message added."""
         if not messages:
             return [], []
 
-        tokenizer = model.tokenizer
+        tokenizer = self.agent_model.tokenizer
         curr_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False,
+            messages,
+            tools=self._tools_schema,
+            tokenize=False,
+            add_generation_prompt=False,
         )
         prev_messages = messages[:-1]
 
         if messages[-1].get("role") == "assistant":
-            prev_text = tokenizer.apply_chat_template(
-                prev_messages, tokenize=False, add_generation_prompt=True,
-            ) if prev_messages else ""
+            prev_text = (
+                tokenizer.apply_chat_template(
+                    prev_messages,
+                    tools=self._tools_schema,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+                if prev_messages
+                else ""
+            )
         else:
-            prev_text = tokenizer.apply_chat_template(
-                prev_messages, tokenize=False, add_generation_prompt=False,
-            ) if prev_messages else ""
+            prev_text = (
+                tokenizer.apply_chat_template(
+                    prev_messages,
+                    tools=self._tools_schema,
+                    tokenize=False,
+                    add_generation_prompt=False,
+                )
+                if prev_messages
+                else ""
+            )
 
         delta_text = curr_text[len(prev_text):]
         new_tokens = tokenizer.encode(delta_text, add_special_tokens=False)
         mask_value = self._compute_loss_mask_for_role(role)
-        loss_mask = [mask_value] * len(new_tokens)
-
-        return new_tokens, loss_mask
+        return new_tokens, [mask_value] * len(new_tokens)
 
     def _extract_logprobs(
         self, results: List[Dict[str, Any]], expected_length: int,
@@ -277,19 +410,19 @@ class CodingAgentOrchestrator:
             return list(logprobs)
         elif len(logprobs) < expected_length:
             return list(logprobs) + [0.0] * (expected_length - len(logprobs))
-        else:
-            return list(logprobs[:expected_length])
+        return list(logprobs[:expected_length])
 
-    def _tokenize_messages(
-        self, messages: List[Dict[str, Any]], model: ModelAdapter,
-    ) -> List[int]:
-        """Tokenize a list of messages."""
+    def _tokenize_messages(self, messages: List[Dict[str, Any]]) -> List[int]:
+        """Tokenize a list of messages (with tool definitions in system prompt)."""
         if not messages:
             return []
-        text = model.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
+        text = self.agent_model.tokenizer.apply_chat_template(
+            messages,
+            tools=self._tools_schema,
+            tokenize=False,
+            add_generation_prompt=True,
         )
-        return model.tokenizer.encode(text, add_special_tokens=False)
+        return self.agent_model.tokenizer.encode(text, add_special_tokens=False)
 
     def _build_trajectory(
         self,
@@ -326,40 +459,3 @@ class CodingAgentOrchestrator:
                 "trainable_role": self.config.trainable_role.value,
             },
         )
-
-
-def _format_observation(
-    output: str,
-    returncode: int,
-    incoming_messages: Optional[List[Dict[str, Any]]] = None,
-) -> str:
-    """Format command output + incoming messages as observation.
-
-    Follows CooperBench's action_observation_template format.
-    """
-    max_output_len = 10000
-
-    parts = [f"<returncode>{returncode}</returncode>"]
-
-    if len(output) < max_output_len:
-        parts.append(f"<output>\n{output}\n</output>")
-    else:
-        elided = len(output) - max_output_len
-        parts.append(
-            "<warning>\n"
-            "The output of your last command was too long.\n"
-            "Please try a different command that produces less output.\n"
-            "</warning>"
-        )
-        parts.append(f"<output_head>\n{output[:5000]}\n</output_head>")
-        parts.append(f"<elided_chars>\n{elided} characters elided\n</elided_chars>")
-        parts.append(f"<output_tail>\n{output[-5000:]}\n</output_tail>")
-
-    # Append incoming messages from partner agent(s)
-    if incoming_messages:
-        for msg in incoming_messages:
-            sender = msg.get("from", "unknown")
-            content = msg.get("content", "")
-            parts.append(f"\n[Message from {sender}]: {content}")
-
-    return "\n".join(parts)

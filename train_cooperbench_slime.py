@@ -88,6 +88,14 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> None:
         help="Give 0.5 reward when agent's feature passes but merge fails (coop only)",
     )
 
+    group.add_argument(
+        "--cooperbench-tool-call-parser",
+        type=str,
+        default="qwen",
+        help="sglang tool call parser for the training model's format: "
+             "qwen (Qwen3), hermes (Hermes/Mistral), llama3 (Llama 3.1+) (default: qwen)",
+    )
+
 
 def main() -> None:
     """Main entry point for CooperBench training with Slime."""
