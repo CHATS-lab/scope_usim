@@ -169,6 +169,8 @@ class P4gEnvironment:
             }
             if self._persuadee_api_key:
                 kwargs["api_key"] = self._persuadee_api_key
+            if self._persuadee_base_url:
+                kwargs["api_base"] = self._persuadee_base_url
 
             logger.debug(
                 f"Calling persuadee: model={self._persuadee_model}, "

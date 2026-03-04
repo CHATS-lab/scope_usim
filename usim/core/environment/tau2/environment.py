@@ -160,15 +160,19 @@ class Tau2Environment:
             if not user_model.startswith("openrouter/"):
                 litellm_model = f"openrouter/{user_model}"
 
+        user_llm_kwargs = {
+            "api_key": user_api_key,
+        }
+        if user_base_url:
+            user_llm_kwargs["api_base"] = user_base_url
+
         self._env = AgentGymEnv(
             domain=domain,
             task_id=task_id,
             max_steps=max_turns,
             solo_mode=False,
             user_llm=litellm_model,
-            user_llm_args={
-                "api_key": user_api_key,
-            },
+            user_llm_args=user_llm_kwargs,
         )
         self._tools_schema: Optional[List[Dict[str, Any]]] = None
 
