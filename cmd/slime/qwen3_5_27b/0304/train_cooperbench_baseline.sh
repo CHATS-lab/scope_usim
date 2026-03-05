@@ -47,7 +47,7 @@ pip install -e "${SLIME_DIR}" 2>&1 | tail -3
 # Pin versions required by sglang 0.5.9 (cooperbench upgrades these)
 pip install transformers==4.57.1 openai==2.6.1 nvidia-cudnn-cu12==9.16.0.29 2>&1 | tail -3
 # Verify slime is importable
-python3 -c "import slime; print(f'slime {slime.__version__} OK')" || { echo "FATAL: slime import failed"; exit 1; }
+python3 -c "from slime.train_async import parse_args, train; print('slime import OK')" || { echo "FATAL: slime import failed"; exit 1; }
 
 # === Dataset setup ===
 if [ ! -d "${COOPERBENCH_DIR}/dataset" ]; then
