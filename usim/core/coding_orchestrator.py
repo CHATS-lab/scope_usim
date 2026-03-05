@@ -103,12 +103,12 @@ def _parse_json_block(block_content: str) -> Optional[Dict[str, Any]]:
 def _parse_tool_calls(
     response_text: str,
     tools_schema: List[Dict[str, Any]],
-    tool_call_parser: str = "qwen3_coder",
+    tool_call_parser: str = "qwen",
 ) -> Dict[str, Any]:
     """Parse tool calls from agent response text.
 
     Self-contained parser — no sglang dependency. Supports both XML format
-    (Qwen3.5/qwen3_coder) and JSON format (Qwen2.5/qwen25) inside <tool_call> blocks.
+    (Qwen3.5/qwen) and JSON format (Qwen2.5/qwen25) inside <tool_call> blocks.
 
     Returns {"normal_text": str, "calls": list} where each call is
     {"name": str, "arguments": dict, "id": str}.
@@ -208,7 +208,7 @@ class CodingAgentOrchestrator:
         config: UserSimConfig,
         environment: Any,
         messaging: Optional[Any] = None,
-        tool_call_parser: str = "qwen3_coder",
+        tool_call_parser: str = "qwen",
         chat_template_kwargs: Optional[Dict[str, Any]] = None,
         max_tool_output_chars: int = 4000,
     ):
@@ -275,7 +275,6 @@ class CodingAgentOrchestrator:
         max_context = getattr(self.config, "max_context_length", 0) or 32768
         status = TrajectoryStatus.TRUNCATED
         has_written_code = False
-        coding_nudge_injected = False
         tool_call_success_count = 0
         tool_call_fail_count = 0
         first_failed_response = ""
@@ -291,25 +290,6 @@ class CodingAgentOrchestrator:
                 )
                 status = TrajectoryStatus.TRUNCATED
                 break
-
-            # After step 2 (i.e. at step 3+), if no write has occurred, inject a strong nudge
-            if step_count >= 3 and not has_written_code and not coding_nudge_injected:
-                coding_nudge_injected = True
-                nudge_content = (
-                    f"<important>STOP EXPLORING. You have spent {step_count - 1} steps reading files "
-                    f"without writing any code. You are running out of context. "
-                    f"You MUST write code NOW using `sed -i` or `cat <<'EOF' > file`. "
-                    f"Then submit with `echo {STOP_SIGNAL}`. "
-                    f"If you do another read-only command, you will run out of context and fail.</important>"
-                )
-                nudge_msg = Message(role="user", content=nudge_content)
-                agent_state = agent_state.add_message(nudge_msg)
-                messages.append(nudge_msg.to_dict())
-                nudge_delta, nudge_mask = self._get_token_delta(messages, "user")
-                all_tokens.extend(nudge_delta)
-                all_masks.extend(nudge_mask)
-                all_logprobs.extend([0.0] * len(nudge_delta))
-                logger.info(f"[step {step_count}] Injected coding nudge (no writes after {step_count - 1} steps)")
 
             # === AGENT TURN: generate response ===
             agent_msgs = agent.build_messages(agent_state)

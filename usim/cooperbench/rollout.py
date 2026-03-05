@@ -69,7 +69,7 @@ async def _baseline_single(
         max_steps = getattr(args, "cooperbench_max_steps", 50)
         dataset_dir = getattr(args, "cooperbench_dataset_dir", None)
         backend = getattr(args, "cooperbench_backend", "modal")
-        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen3_coder")
+        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen")
 
         # Create environment and pre-start sandbox (pull image, start container)
         environment = CooperBenchEnvironment(image_name=image_name, timeout=3600)
@@ -182,7 +182,7 @@ async def _solo_single(
         max_steps = getattr(args, "cooperbench_max_steps", 50)
         dataset_dir = getattr(args, "cooperbench_dataset_dir", None)
         backend = getattr(args, "cooperbench_backend", "modal")
-        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen3_coder")
+        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen")
         f1_id, f2_id = feature_ids
 
         # Create environment and pre-start sandbox
@@ -289,7 +289,7 @@ async def _coop_single(
         dataset_dir = getattr(args, "cooperbench_dataset_dir", None)
         backend = getattr(args, "cooperbench_backend", "modal")
         partial_reward = getattr(args, "cooperbench_partial_reward", False)
-        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen3_coder")
+        tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen")
         f1_id, f2_id = feature_ids
 
         # Create unique run ID for Redis namespacing
@@ -504,7 +504,7 @@ def _preflight_check(args: Namespace) -> None:
                 "type": "object", "properties": {"command": {"type": "string"}},
             },
         }}]
-        parser_name = getattr(args, "cooperbench_tool_call_parser", "qwen3_coder")
+        parser_name = getattr(args, "cooperbench_tool_call_parser", "qwen")
         result = _parse_tool_calls(test_response, test_tools, parser_name)
         if result["calls"]:
             print(

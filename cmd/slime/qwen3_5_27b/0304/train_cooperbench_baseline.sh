@@ -81,7 +81,7 @@ ROLLOUT_ARGS=(
    --rollout-batch-size 8
    --n-samples-per-prompt 4
    --rollout-max-response-len 8192
-   --rollout-temperature 1.0
+   --rollout-temperature 0.7
    --global-batch-size 32
    --balance-data
 )
@@ -99,7 +99,7 @@ COOPERBENCH_ARGS=(
    --cooperbench-max-tokens-per-turn 4096
    --cooperbench-max-tool-output-chars 4000
    --cooperbench-patch-bonus 0.1
-   --cooperbench-tool-call-parser qwen3_coder
+   --cooperbench-tool-call-parser qwen
 )
 
 PERF_ARGS=(

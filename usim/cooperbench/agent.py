@@ -27,67 +27,77 @@ _COMMAND_RULES_EXAMPLE_AND_COMMANDS = """\
 
 ## Command Execution Rules
 
-You are operating in an environment where you issue bash commands via tool calls.
+You are operating in an environment where
+
+1. You issue at least one command
+2. The system executes the command(s) in a subshell
+3. You see the result(s)
+4. You write your next command(s)
+
+Each response should include:
+
+1. **Reasoning text** where you explain your analysis and plan
+2. At least one tool call with your command
 
 **CRITICAL REQUIREMENTS:**
 
-- Every response MUST include at least one bash tool call
-- Directory/env changes are NOT persistent — prefix with `cd /path && ...`
-- Submit when done: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` (alone, no other commands)
+- Your response SHOULD include reasoning text explaining what you're doing
+- Your response MUST include AT LEAST ONE bash tool call
+- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
+- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
+- Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
+  Do not combine it with any other command. <important>After this command, you cannot continue working on this task.</important>
 
-<important>You have very limited context. Do NOT spend more than 1 step exploring. Read the task description carefully — it tells you what file to edit. Start writing code in your SECOND response at the latest.</important>
+Example of a CORRECT response:
+<example_response>
+I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.
 
-## Example: Complete Coding Workflow
-
-### Step 1 — Quick look at the target file:
-
-The task says to modify `src/utils.py`. Let me check its current contents.
-
-<tool_call>
-<function=bash>
-<parameter=command>cat src/utils.py</parameter>
-</function>
-</tool_call>
-
-### Step 2 — Write the code (use sed or cat to edit/create files):
-
-I can see the existing code. I'll add the new function after line 15.
-
-<tool_call>
-<function=bash>
-<parameter=command>sed -i '15a\\def new_feature():\\n    return 42' src/utils.py</parameter>
-</function>
-</tool_call>
-
-### Step 3 — Submit:
-
-The changes are implemented. Time to submit.
-
-<tool_call>
-<function=bash>
-<parameter=command>echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT</parameter>
-</function>
-</tool_call>
+[Makes bash tool call with {"command": "ls -la"} as arguments]
+</example_response>
 
 <system_information>
 %s
 </system_information>
 
-## Useful commands
+## Useful command examples
+
+### Create a new file:
 
 ```bash
-# Create a new file
 cat <<'EOF' > newfile.py
 import numpy as np
-print("hello")
+hello = "world"
+print(hello)
 EOF
+```
 
-# Edit with sed
-sed -i 's/old/new/g' file.py          # Replace all
-sed -i '10,20s/old/new/g' file.py     # Lines 10-20 only
+### Edit files with sed:
 
-# View file
-nl -ba file.py | sed -n '10,20p'
+```bash
+# Replace all occurrences
+sed -i 's/old_string/new_string/g' filename.py
+
+# Replace only first occurrence
+sed -i 's/old_string/new_string/' filename.py
+
+# Replace first occurrence on line 1
+sed -i '1s/old_string/new_string/' filename.py
+
+# Replace all occurrences in lines 1-10
+sed -i '1,10s/old_string/new_string/g' filename.py
+```
+
+### View file content:
+
+```bash
+# View specific lines with numbers
+nl -ba filename.py | sed -n '10,20p'
+```
+
+### Any other command you want to run
+
+```bash
+anything
 ```"""
 
 
@@ -110,7 +120,7 @@ def _render_system_prompt(
     messaging_enabled: bool = False,
 ) -> str:
     """Render system prompt matching mini.yaml system_template."""
-    prompt = "You are an expert software engineer. You write code quickly and efficiently. When given a coding task, you read the target file once and then immediately implement the changes.\n"
+    prompt = "You are a helpful assistant that can interact with a computer.\n"
     if agent_id and agents and len(agents) > 1:
         agents_str = ", ".join(agents)
         prompt += f"\nYou are {agent_id} working as a team with: {agents_str}.\n"
@@ -154,11 +164,11 @@ def _render_instance_template(
     else:
         # --- Non-collab (baseline/solo) workflow ---
         text += "\n## Workflow\n\n"
-        text += "<important>You have VERY limited context (~5 steps). You MUST start writing code by step 2.</important>\n\n"
-        text += "1. Read the target file mentioned in the task (1 command)\n"
-        text += "2. Write/edit the code using `sed -i` or `cat <<'EOF' > file`\n"
+        text += "<important>You have LIMITED context. Be efficient — start writing code early.</important>\n\n"
+        text += "1. Quickly identify the relevant files (1-2 commands max)\n"
+        text += "2. Implement the feature by editing/creating the necessary files\n"
         text += "3. Submit: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\n"
-        text += "\nDo NOT explore the repo structure. The task description tells you which files to modify. Go directly to those files.\n"
+        text += "   Do not combine it with any other command. <important>After this command, you cannot continue working on this task.</important>\n"
 
     # --- Shared suffix (command rules, example, system info, useful commands) ---
     text += _shared_suffix()
