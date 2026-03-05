@@ -33,6 +33,7 @@ def check_modal_auth():
     try:
         import modal
 
+        modal.enable_output()
         print(f"modal version: {modal.__version__}", flush=True)
     except ImportError:
         print("FATAL: modal not installed", flush=True)
@@ -70,44 +71,53 @@ def load_one_task():
 
 async def test_sandbox(task):
     """Create a Modal sandbox and run a few commands."""
-    print("\n=== Step 3: Create Sandbox ===", flush=True)
+    print("\n=== Step 3a: Raw Modal Sandbox (no wrapper) ===", flush=True)
 
+    import modal
     from cooperbench.utils import get_image_name
 
     image_name = get_image_name(task["repo"], task["task_id"])
     print(f"Image: {image_name}", flush=True)
 
-    from usim.core.environment.cooperbench.sandbox import CooperBenchSandbox
+    # Test raw Modal sandbox first (same as interactive test that worked)
+    app = modal.App.lookup("cooperbench", create_if_missing=True)
+    image = modal.Image.from_registry(image_name).entrypoint(["sleep", "infinity"])
+    t0 = time.time()
+    sb = modal.Sandbox.create(app=app, image=image, timeout=300)
+    print(f"Raw sandbox created in {time.time() - t0:.1f}s: {sb.object_id}", flush=True)
+    p = sb.exec("bash", "-lc", "pwd && ls")
+    print(f"  stdout: {p.stdout.read()[:300]}", flush=True)
+    print(f"  stderr: {p.stderr.read()[:300]}", flush=True)
+    p.wait()
+    print(f"  returncode: {p.returncode}", flush=True)
+    sb.terminate()
+    print("Raw sandbox OK", flush=True)
 
-    sandbox = CooperBenchSandbox(image_name=image_name, timeout=600)
+    # Now test via ModalEnvironment (what training actually uses)
+    print("\n=== Step 3b: ModalEnvironment wrapper ===", flush=True)
+    from cooperbench.agents.mini_swe_agent_v2.environments.modal import ModalEnvironment
 
     t0 = time.time()
-    try:
-        await sandbox.start()
-        print(f"Sandbox started in {time.time() - t0:.1f}s", flush=True)
-    except Exception as e:
-        print(f"Sandbox start FAILED after {time.time() - t0:.1f}s: {e}", flush=True)
-        raise
+    env = await asyncio.to_thread(
+        ModalEnvironment, image=image_name, cwd="/workspace/repo", timeout=600
+    )
+    print(f"ModalEnvironment created in {time.time() - t0:.1f}s", flush=True)
 
     # Run a few test commands
     print("\n=== Step 4: Execute Commands ===", flush=True)
 
     for cmd in ["pwd", "ls -la", "git log --oneline -5"]:
         print(f"\n$ {cmd}", flush=True)
-        result = await sandbox.execute(cmd)
+        result = await asyncio.to_thread(env.execute, {"command": cmd})
         output = result["output"]
         if len(output) > 500:
             output = output[:250] + "\n...\n" + output[-250:]
         print(f"  returncode={result['returncode']}", flush=True)
         print(f"  output: {output}", flush=True)
 
-    # Get patch
-    patch = await sandbox.get_patch()
-    print(f"\nPatch length: {len(patch)} chars", flush=True)
-
     # Cleanup
-    await sandbox.cleanup()
-    print("Sandbox cleaned up", flush=True)
+    await asyncio.to_thread(env.cleanup)
+    print("ModalEnvironment cleaned up", flush=True)
 
 
 async def test_environment(task):
