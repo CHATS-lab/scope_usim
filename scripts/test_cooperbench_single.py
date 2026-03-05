@@ -94,7 +94,8 @@ async def test_sandbox(task):
     print("Raw sandbox OK", flush=True)
 
     # Now test via ModalEnvironment (what training actually uses)
-    print("\n=== Step 3b: ModalEnvironment wrapper ===", flush=True)
+    # Test 3b: asyncio.to_thread (current code — suspected broken due to cross-thread gRPC)
+    print("\n=== Step 3b: ModalEnvironment via asyncio.to_thread ===", flush=True)
     from cooperbench.agents.mini_swe_agent_v2.environments.modal import ModalEnvironment
 
     t0 = time.time()
@@ -103,21 +104,42 @@ async def test_sandbox(task):
     )
     print(f"ModalEnvironment created in {time.time() - t0:.1f}s", flush=True)
 
-    # Run a few test commands
-    print("\n=== Step 4: Execute Commands ===", flush=True)
-
-    for cmd in ["pwd", "ls -la", "git log --oneline -5"]:
-        print(f"\n$ {cmd}", flush=True)
-        result = await asyncio.to_thread(env.execute, {"command": cmd})
-        output = result["output"]
-        if len(output) > 500:
-            output = output[:250] + "\n...\n" + output[-250:]
-        print(f"  returncode={result['returncode']}", flush=True)
-        print(f"  output: {output}", flush=True)
-
-    # Cleanup
+    print("$ pwd (via asyncio.to_thread — may fail due to cross-thread gRPC)", flush=True)
+    try:
+        result = await asyncio.to_thread(env.execute, {"command": "pwd"})
+        print(f"  OK: {result['output'][:100]}", flush=True)
+    except Exception as e:
+        print(f"  FAILED (expected): {e}", flush=True)
     await asyncio.to_thread(env.cleanup)
-    print("ModalEnvironment cleaned up", flush=True)
+
+    # Test 3c: all in one thread via run_in_executor with a dedicated thread
+    print("\n=== Step 3c: ModalEnvironment all in one thread ===", flush=True)
+    import concurrent.futures
+
+    def _test_modal_env_single_thread(img, cwd):
+        """Run ModalEnvironment create + execute in one thread."""
+        env = ModalEnvironment(image=img, cwd=cwd, timeout=600)
+        results = []
+        for cmd in ["pwd", "ls -la", "git log --oneline -5"]:
+            r = env.execute({"command": cmd})
+            results.append((cmd, r))
+        env.cleanup()
+        return results
+
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        t0 = time.time()
+        results = await loop.run_in_executor(
+            pool, _test_modal_env_single_thread, image_name, "/workspace/repo"
+        )
+        print(f"Single-thread test completed in {time.time() - t0:.1f}s", flush=True)
+        for cmd, result in results:
+            output = result["output"]
+            if len(output) > 300:
+                output = output[:300] + "..."
+            print(f"\n$ {cmd}", flush=True)
+            print(f"  returncode={result['returncode']}", flush=True)
+            print(f"  output: {output}", flush=True)
 
 
 async def test_environment(task):
