@@ -140,6 +140,7 @@ class CodingAgentOrchestrator:
         environment: Any,
         messaging: Optional[Any] = None,
         tool_call_parser: str = "glm",
+        chat_template_kwargs: Optional[Dict[str, Any]] = None,
     ):
         """Initialize the coding orchestrator.
 
@@ -150,6 +151,7 @@ class CodingAgentOrchestrator:
             messaging: Optional MessagingConnector for inter-agent communication
             tool_call_parser: sglang parser name for the model's tool call format.
                 "qwen" for Qwen3, "hermes" for Hermes/Mistral, "llama3" for Llama 3.1+.
+            chat_template_kwargs: Extra kwargs for apply_chat_template (e.g. enable_thinking=False)
         """
         self.agent_model = agent_model
         self.config = config
@@ -157,6 +159,7 @@ class CodingAgentOrchestrator:
         self.messaging = messaging
         self.tool_call_parser = tool_call_parser
         self._tools_schema = environment.get_tools()
+        self._chat_template_kwargs = chat_template_kwargs or {}
 
     async def run_session(
         self,
@@ -369,11 +372,13 @@ class CodingAgentOrchestrator:
             return [], []
 
         tokenizer = self.agent_model.tokenizer
+        tmpl_kwargs = self._chat_template_kwargs
         curr_text = tokenizer.apply_chat_template(
             messages,
             tools=self._tools_schema,
             tokenize=False,
             add_generation_prompt=False,
+            **tmpl_kwargs,
         )
         prev_messages = messages[:-1]
 
@@ -384,6 +389,7 @@ class CodingAgentOrchestrator:
                     tools=self._tools_schema,
                     tokenize=False,
                     add_generation_prompt=True,
+                    **tmpl_kwargs,
                 )
                 if prev_messages
                 else ""
@@ -395,6 +401,7 @@ class CodingAgentOrchestrator:
                     tools=self._tools_schema,
                     tokenize=False,
                     add_generation_prompt=False,
+                    **tmpl_kwargs,
                 )
                 if prev_messages
                 else ""
@@ -428,6 +435,7 @@ class CodingAgentOrchestrator:
             tools=self._tools_schema,
             tokenize=False,
             add_generation_prompt=True,
+            **self._chat_template_kwargs,
         )
         return self.agent_model.tokenizer.encode(text, add_special_tokens=False)
 

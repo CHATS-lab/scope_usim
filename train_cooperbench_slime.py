@@ -104,6 +104,20 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> argparse.Argum
     )
 
     group.add_argument(
+        "--cooperbench-max-context-length",
+        type=int,
+        default=65536,
+        help="Max context length for coding agent (default: 65536)",
+    )
+
+    group.add_argument(
+        "--cooperbench-enable-thinking",
+        action="store_true",
+        default=False,
+        help="Enable Qwen3.5 thinking mode (default: disabled for tool calling)",
+    )
+
+    group.add_argument(
         "--docent-collection",
         type=str,
         default=None,

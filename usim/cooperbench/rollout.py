@@ -71,8 +71,9 @@ async def _baseline_single(
         backend = getattr(args, "cooperbench_backend", "modal")
         tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen")
 
-        # Create environment
+        # Create environment and pre-start sandbox (pull image, start container)
         environment = CooperBenchEnvironment(image_name=image_name, timeout=3600)
+        await environment.start()
 
         # Create agent (no collaboration)
         agent = CooperBenchAgent(agent_id="agent1", setting="baseline")
@@ -94,15 +95,23 @@ async def _baseline_single(
         config = UserSimConfig(
             trainable_role=TrainableRole(getattr(args, "trainable_role", "agent")),
             max_turns=max_steps,
-            max_tokens=getattr(args, "rollout_max_response_len", 4096),
+            max_tokens=getattr(args, "rollout_max_response_len", 8192),
+            max_context_length=getattr(args, "cooperbench_max_context_length", 65536),
             temperature=sampling_params.get("temperature", 0.7),
         )
+
+        chat_template_kwargs = {}
+        if getattr(args, "cooperbench_enable_thinking", None) is not None:
+            chat_template_kwargs["enable_thinking"] = args.cooperbench_enable_thinking
+        else:
+            chat_template_kwargs["enable_thinking"] = False
 
         orchestrator = CodingAgentOrchestrator(
             agent_model=model_adapter,
             config=config,
             environment=environment,
             tool_call_parser=tool_call_parser,
+            chat_template_kwargs=chat_template_kwargs,
         )
 
         trajectory = await orchestrator.run_session(task, agent)
@@ -164,8 +173,9 @@ async def _solo_single(
         tool_call_parser = getattr(args, "cooperbench_tool_call_parser", "qwen")
         f1_id, f2_id = feature_ids
 
-        # Create environment
+        # Create environment and pre-start sandbox
         environment = CooperBenchEnvironment(image_name=image_name, timeout=3600)
+        await environment.start()
 
         # Create agent with combined prompt for both features
         agent = CooperBenchAgent(agent_id="agent1", setting="solo")
@@ -183,15 +193,23 @@ async def _solo_single(
         config = UserSimConfig(
             trainable_role=TrainableRole(getattr(args, "trainable_role", "agent")),
             max_turns=max_steps,
-            max_tokens=getattr(args, "rollout_max_response_len", 4096),
+            max_tokens=getattr(args, "rollout_max_response_len", 8192),
+            max_context_length=getattr(args, "cooperbench_max_context_length", 65536),
             temperature=sampling_params.get("temperature", 0.7),
         )
+
+        chat_template_kwargs = {}
+        if getattr(args, "cooperbench_enable_thinking", None) is not None:
+            chat_template_kwargs["enable_thinking"] = args.cooperbench_enable_thinking
+        else:
+            chat_template_kwargs["enable_thinking"] = False
 
         orchestrator = CodingAgentOrchestrator(
             agent_model=model_adapter,
             config=config,
             environment=environment,
             tool_call_parser=tool_call_parser,
+            chat_template_kwargs=chat_template_kwargs,
         )
 
         trajectory = await orchestrator.run_session(task, agent)
@@ -294,13 +312,14 @@ async def _coop_single(
         partner_thread = threading.Thread(target=_run_partner, daemon=True)
         partner_thread.start()
 
-        # Create environment for trainable agent (with send_message tool enabled)
+        # Create environment and pre-start sandbox
         environment = CooperBenchEnvironment(
             image_name=image_name,
             messaging=messaging,
             messaging_enabled=True,
             timeout=3600,
         )
+        await environment.start()
 
         # Create agent with coop collaboration prompts
         agent = CooperBenchAgent(
@@ -326,9 +345,16 @@ async def _coop_single(
         config = UserSimConfig(
             trainable_role=TrainableRole(getattr(args, "trainable_role", "agent")),
             max_turns=max_steps,
-            max_tokens=getattr(args, "rollout_max_response_len", 4096),
+            max_tokens=getattr(args, "rollout_max_response_len", 8192),
+            max_context_length=getattr(args, "cooperbench_max_context_length", 65536),
             temperature=sampling_params.get("temperature", 0.7),
         )
+
+        chat_template_kwargs = {}
+        if getattr(args, "cooperbench_enable_thinking", None) is not None:
+            chat_template_kwargs["enable_thinking"] = args.cooperbench_enable_thinking
+        else:
+            chat_template_kwargs["enable_thinking"] = False
 
         orchestrator = CodingAgentOrchestrator(
             agent_model=model_adapter,
@@ -336,6 +362,7 @@ async def _coop_single(
             environment=environment,
             messaging=messaging,
             tool_call_parser=tool_call_parser,
+            chat_template_kwargs=chat_template_kwargs,
         )
 
         trajectory = await orchestrator.run_session(task, agent)

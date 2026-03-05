@@ -52,6 +52,13 @@ class CooperBenchEnvironment:
         )
         self._step_count = 0
 
+    async def start(self) -> None:
+        """Pre-create the sandbox (pull image, start container).
+
+        Call this before generation to avoid lazy initialization during tool execution.
+        """
+        await self.sandbox.start()
+
     def get_tools(self) -> List[Dict[str, Any]]:
         """Get available tool schemas: bash + optional send_message."""
         tools = [
