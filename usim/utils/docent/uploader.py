@@ -6,6 +6,8 @@ Provides:
 - upload_from_directory: Standalone function for uploading JSONL files after the fact
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
