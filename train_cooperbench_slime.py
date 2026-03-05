@@ -122,9 +122,10 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> argparse.Argum
 def main() -> None:
     """Main entry point for CooperBench training with Slime."""
     try:
-        from slime.train_async import parse_args, train
-    except ImportError:
-        logger.error("slime package not found. Install with: pip install slime")
+        from slime.train import train
+        from slime.utils.arguments import parse_args
+    except ImportError as e:
+        logger.error(f"slime import failed: {e}", exc_info=True)
         sys.exit(1)
 
     # Parse arguments with CooperBench additions
