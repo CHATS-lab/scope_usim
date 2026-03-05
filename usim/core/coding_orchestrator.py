@@ -492,6 +492,34 @@ class CodingAgentOrchestrator:
             return 1 if role == "user" else 0
         return 0
 
+    @staticmethod
+    def _ensure_dict_arguments(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Ensure tool_calls arguments are dicts (not JSON strings) for apply_chat_template.
+
+        Qwen3.5's Jinja2 chat template calls .items() on arguments, which fails
+        if arguments are JSON strings. This converts them to dicts.
+        """
+        result = []
+        for msg in messages:
+            if msg.get("tool_calls"):
+                msg = dict(msg)
+                msg["tool_calls"] = [
+                    {
+                        **tc,
+                        "function": {
+                            **tc["function"],
+                            "arguments": (
+                                json.loads(tc["function"]["arguments"])
+                                if isinstance(tc["function"]["arguments"], str)
+                                else tc["function"]["arguments"]
+                            ),
+                        },
+                    }
+                    for tc in msg["tool_calls"]
+                ]
+            result.append(msg)
+        return result
+
     def _get_token_delta(
         self,
         messages: List[Dict[str, Any]],
@@ -500,6 +528,9 @@ class CodingAgentOrchestrator:
         """Calculate token delta for the last message added."""
         if not messages:
             return [], []
+
+        # Preprocess: ensure tool_calls have dict arguments for apply_chat_template
+        messages = self._ensure_dict_arguments(messages)
 
         tokenizer = self.agent_model.tokenizer
         tmpl_kwargs = self._chat_template_kwargs
