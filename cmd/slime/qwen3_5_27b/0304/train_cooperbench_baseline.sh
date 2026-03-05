@@ -171,6 +171,14 @@ export MODAL_TOKEN_ID MODAL_TOKEN_SECRET
 echo "MODAL_TOKEN_ID set: $([ -n "$MODAL_TOKEN_ID" ] && echo yes || echo no)"
 echo "MODAL_TOKEN_SECRET set: $([ -n "$MODAL_TOKEN_SECRET" ] && echo yes || echo no)"
 
+# === Redis (needed for coop messaging) ===
+if command -v redis-server &>/dev/null; then
+    redis-server --daemonize yes --bind 127.0.0.1 --port 6379
+    echo "Redis started on localhost:6379"
+else
+    echo "WARNING: redis-server not found, coop mode will not work"
+fi
+
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265
 
