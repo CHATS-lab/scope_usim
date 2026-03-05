@@ -97,9 +97,9 @@ if [ "${SETTING}" = "coop" ]; then
 fi
 
 PERF_ARGS=(
-   --tensor-model-parallel-size 8
+   --tensor-model-parallel-size 4
    --sequence-parallel
-   --pipeline-model-parallel-size 1
+   --pipeline-model-parallel-size 2
    --context-parallel-size 1
    --use-dynamic-batch-size
    --max-tokens-per-gpu 8192
