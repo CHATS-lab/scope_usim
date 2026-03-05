@@ -44,8 +44,8 @@ echo "Installing CooperBench..."
 pip install -e "${COOPERBENCH_DIR}" 2>&1 | tail -5
 echo "Re-installing slime + fixing deps..."
 pip install -e "${SLIME_DIR}" 2>&1 | tail -3
-# Qwen3.5 needs latest transformers; pin openai for sglang; restore cudnn 9.16
-pip install --upgrade transformers openai==2.6.1 nvidia-cudnn-cu12==9.16.0.29 2>&1 | tail -3
+# Qwen3.5 needs latest transformers; pin openai for sglang; restore cudnn 9.16; add docent
+pip install --upgrade transformers openai==2.6.1 nvidia-cudnn-cu12==9.16.0.29 docent-python 2>&1 | tail -3
 # Verify slime is importable
 python3 -c "from slime.train_async import parse_args, train; print('slime import OK')" || { echo "FATAL: slime import failed"; exit 1; }
 
