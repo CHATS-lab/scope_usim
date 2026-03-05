@@ -205,6 +205,7 @@ class CodingAgentOrchestrator:
         max_steps = self.config.max_turns
         max_context = getattr(self.config, "max_context_length", 0) or 32768
         status = TrajectoryStatus.TRUNCATED
+        context_warning_injected = False
 
         for step in range(max_steps):
             step_count = step + 1
@@ -217,6 +218,25 @@ class CodingAgentOrchestrator:
                 )
                 status = TrajectoryStatus.TRUNCATED
                 break
+
+            # Inject context budget warning at ~60% usage to encourage coding
+            context_usage = len(all_tokens) / max_context
+            if not context_warning_injected and context_usage > 0.6:
+                context_warning_injected = True
+                remaining_pct = int((1 - context_usage) * 100)
+                warn_content = (
+                    f"<important>WARNING: You have used {int(context_usage * 100)}% of your context budget "
+                    f"(~{remaining_pct}% remaining). If you haven't started writing code yet, "
+                    f"START NOW. Write/edit files immediately, then submit with "
+                    f"`echo {STOP_SIGNAL}`. Do not read more files.</important>"
+                )
+                warn_msg = Message(role="user", content=warn_content)
+                agent_state = agent_state.add_message(warn_msg)
+                messages.append(warn_msg.to_dict())
+                warn_delta, warn_mask = self._get_token_delta(messages, "user")
+                all_tokens.extend(warn_delta)
+                all_masks.extend(warn_mask)
+                all_logprobs.extend([0.0] * len(warn_delta))
 
             # === AGENT TURN: generate response ===
             agent_msgs = agent.build_messages(agent_state)
@@ -300,6 +320,13 @@ class CodingAgentOrchestrator:
 
                 if name == "bash":
                     command = args.get("command", "").strip() if isinstance(args, dict) else ""
+                    is_write = any(
+                        k in command for k in ("cat >", "cat <<", "sed -i", "echo >", "tee ", "patch ", "> ")
+                    )
+                    logger.info(
+                        f"[step {step_count}] bash({'W' if is_write else 'R'}): "
+                        f"{command[:120]}{'...' if len(command) > 120 else ''}"
+                    )
                     if STOP_SIGNAL in command:
                         stop = True
                         tool_content = json.dumps({"returncode": 0, "output": STOP_SIGNAL})
