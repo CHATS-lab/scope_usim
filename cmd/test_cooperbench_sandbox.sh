@@ -17,12 +17,10 @@ pip install modal 2>&1 | tail -3
 echo "=== Modal auth check ==="
 echo "MODAL_TOKEN_ID set: $([ -n "$MODAL_TOKEN_ID" ] && echo yes || echo no)"
 echo "MODAL_TOKEN_SECRET set: $([ -n "$MODAL_TOKEN_SECRET" ] && echo yes || echo no)"
-if [ -n "$MODAL_TOKEN_ID" ] && [ -n "$MODAL_TOKEN_SECRET" ]; then
-    modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
-    echo "Modal token configured via env vars"
-else
-    echo "WARNING: Modal tokens not set, sandbox creation will fail"
-fi
+# Inside a Modal container, auth happens via unix:/run/modal.sock automatically.
+# We just need MODAL_TOKEN_ID/SECRET exported for nested sandbox creation.
+export MODAL_TOKEN_ID MODAL_TOKEN_SECRET
+python3 -c "import modal; print(f'modal version: {modal.__version__}')" || echo "modal not importable"
 
 echo "=== Running single task test ==="
 cd "${PROJECT_ROOT}"
