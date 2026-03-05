@@ -118,6 +118,13 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> argparse.Argum
     )
 
     group.add_argument(
+        "--cooperbench-max-concurrent",
+        type=int,
+        default=16,
+        help="Max concurrent rollout sessions to avoid SGLang OOM (default: 16)",
+    )
+
+    group.add_argument(
         "--docent-collection",
         type=str,
         default=None,

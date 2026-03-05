@@ -502,6 +502,11 @@ async def _run_batch_async(
     # Per-sample timeout: sandbox timeout (3600) + buffer for reward eval
     sample_timeout = getattr(args, "cooperbench_sample_timeout", 5400)
 
+    # Limit concurrent sessions to avoid SGLang OOM from too many active KV caches.
+    # Each multi-turn session accumulates 20-30k+ tokens; 64 concurrent is too much for 27B.
+    max_concurrent = getattr(args, "cooperbench_max_concurrent", 16)
+    semaphore = asyncio.Semaphore(max_concurrent)
+
     dispatch = {
         "baseline": _baseline_single,
         "solo": _solo_single,
@@ -509,11 +514,15 @@ async def _run_batch_async(
     }
     fn = dispatch[setting]
 
+    async def _run_with_semaphore(fn, args, sample, sampling_params, timeout):
+        async with semaphore:
+            return await _run_single_with_timeout(fn, args, sample, sampling_params, timeout)
+
     tasks = []
     for group in samples:
         for sample in group:
             tasks.append(
-                _run_single_with_timeout(fn, args, sample, sampling_params, sample_timeout)
+                _run_with_semaphore(fn, args, sample, sampling_params, sample_timeout)
             )
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
