@@ -198,6 +198,9 @@ class CooperBenchDataSource(DataSource):
     def load(self, rollout_id=None):
         pass
 
+    def __len__(self) -> int:
+        return len(self._load_entries())
+
 
 def get_cooperbench_data_source(args) -> CooperBenchDataSource:
     """Factory function called by Slime's RolloutManager.
