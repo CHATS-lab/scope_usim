@@ -454,7 +454,7 @@ class CodingAgentOrchestrator:
             loss_mask=loss_mask,
             rollout_log_probs=logprobs,
             response="\n".join(response_parts),
-            response_length=sum(loss_mask),
+            response_length=len(loss_mask),
             reward=0.0,  # Reward computed externally (merge test result)
             status=status,
             messages=messages,
