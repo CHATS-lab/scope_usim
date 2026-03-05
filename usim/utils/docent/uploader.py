@@ -11,10 +11,15 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Optional
 
-from docent import Docent
-from docent.data_models import AgentRun
+try:
+    from docent import Docent
+    from docent.data_models import AgentRun
 
-from usim.utils.docent.converter import load_jsonl_directory, sample_to_agent_run
+    from usim.utils.docent.converter import load_jsonl_directory, sample_to_agent_run
+
+    _HAS_DOCENT = True
+except ImportError:
+    _HAS_DOCENT = False
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,10 @@ def get_docent_uploader(args: Any) -> Optional["DocentUploader"]:
     """
     collection = getattr(args, "docent_collection", None)
     if not collection:
+        return None
+
+    if not _HAS_DOCENT:
+        logger.warning("docent-python not installed. Docent uploads are disabled.")
         return None
 
     cached = _uploader_cache.get(collection)
