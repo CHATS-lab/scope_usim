@@ -91,9 +91,9 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> argparse.Argum
     group.add_argument(
         "--cooperbench-tool-call-parser",
         type=str,
-        default="qwen",
+        default="qwen25",
         help="sglang tool call parser for the training model's format: "
-             "qwen (Qwen3), hermes (Hermes/Mistral), llama3 (Llama 3.1+) (default: qwen)",
+             "qwen25 (Qwen2.5/3/3.5), llama3, mistral, deepseekv3, qwen3_coder (default: qwen25)",
     )
 
     group.add_argument(

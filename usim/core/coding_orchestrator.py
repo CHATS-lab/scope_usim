@@ -34,7 +34,7 @@ STOP_SIGNAL = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
 def _parse_tool_calls(
     response_text: str,
     tools_schema: List[Dict[str, Any]],
-    tool_call_parser: str = "glm",
+    tool_call_parser: str = "qwen25",
 ) -> Dict[str, Any]:
     """Parse tool calls from agent response using sglang's FunctionCallParser.
 
@@ -81,7 +81,10 @@ def _parse_tool_calls(
 
         return {"normal_text": normal_text, "calls": normalized}
     except Exception as e:
-        logger.warning(f"Tool call parsing failed: {e}")
+        logger.error(
+            f"Tool call parsing FAILED (parser={tool_call_parser}): {e}. "
+            f"Response preview: {response_text[:200]!r}"
+        )
         return {"normal_text": response_text, "calls": []}
 
 
@@ -139,7 +142,7 @@ class CodingAgentOrchestrator:
         config: UserSimConfig,
         environment: Any,
         messaging: Optional[Any] = None,
-        tool_call_parser: str = "glm",
+        tool_call_parser: str = "qwen25",
         chat_template_kwargs: Optional[Dict[str, Any]] = None,
         max_tool_output_chars: int = 4000,
     ):
