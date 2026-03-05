@@ -32,6 +32,7 @@ def check_modal_auth():
 
     try:
         import modal
+
         print(f"modal version: {modal.__version__}", flush=True)
     except ImportError:
         print("FATAL: modal not installed", flush=True)
@@ -91,7 +92,7 @@ async def test_sandbox(task):
     # Run a few test commands
     print("\n=== Step 4: Execute Commands ===", flush=True)
 
-    for cmd in ["pwd", "ls -la", "git log --oneline -5", "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"]:
+    for cmd in ["pwd", "ls -la", "git log --oneline -5"]:
         print(f"\n$ {cmd}", flush=True)
         result = await sandbox.execute(cmd)
         output = result["output"]
@@ -107,8 +108,6 @@ async def test_sandbox(task):
     # Cleanup
     await sandbox.cleanup()
     print("Sandbox cleaned up", flush=True)
-
-    return True
 
 
 async def test_environment(task):
@@ -133,17 +132,15 @@ async def test_environment(task):
     # Cleanup
     await env.cleanup()
     print("Environment cleaned up", flush=True)
-    return True
 
 
 async def test_with_model(task, model_name):
     """Test with actual LLM generation via litellm."""
     print(f"\n=== Step 6: Test with model {model_name} ===", flush=True)
 
-    from cooperbench.utils import get_image_name
-
     from usim.cooperbench.agent import CooperBenchAgent
     from usim.core.environment.cooperbench.environment import CooperBenchEnvironment
+    from cooperbench.utils import get_image_name
 
     image_name = get_image_name(task["repo"], task["task_id"])
     env = CooperBenchEnvironment(image_name=image_name, timeout=600)
@@ -154,12 +151,19 @@ async def test_with_model(task, model_name):
     print(f"Task message length: {len(task_msg)} chars", flush=True)
     print(f"First 200 chars: {task_msg[:200]}...", flush=True)
 
-    # Just test that the agent and environment can be created
-    # Full LLM loop would need SGLang or litellm setup
     print("Agent + Environment created OK", flush=True)
 
     await env.cleanup()
-    return True
+
+
+async def run_all_tests(skip_sandbox: bool, model: str | None, task: dict):
+    """Run all tests in a single event loop."""
+    if not skip_sandbox:
+        await test_sandbox(task)
+        await test_environment(task)
+
+    if model:
+        await test_with_model(task, model)
 
 
 def main():
@@ -182,29 +186,15 @@ def main():
     # Step 2: Load task
     task = load_one_task()
 
-    # Step 3-4: Test sandbox
-    if not args.skip_sandbox:
-        try:
-            asyncio.run(test_sandbox(task))
-        except Exception as e:
-            print(f"\nSandbox test FAILED: {e}", flush=True)
-            sys.exit(1)
+    # Steps 3-6: Run all async tests in a single event loop
+    try:
+        asyncio.run(run_all_tests(args.skip_sandbox, args.model, task))
+    except Exception as e:
+        print(f"\nTest FAILED: {e}", flush=True)
+        import traceback
 
-    # Step 5: Test environment
-    if not args.skip_sandbox:
-        try:
-            asyncio.run(test_environment(task))
-        except Exception as e:
-            print(f"\nEnvironment test FAILED: {e}", flush=True)
-            sys.exit(1)
-
-    # Step 6: Test with model (optional)
-    if args.model:
-        try:
-            asyncio.run(test_with_model(task, args.model))
-        except Exception as e:
-            print(f"\nModel test FAILED: {e}", flush=True)
-            sys.exit(1)
+        traceback.print_exc()
+        sys.exit(1)
 
     print("\n" + "=" * 60, flush=True)
     print("ALL TESTS PASSED", flush=True)
