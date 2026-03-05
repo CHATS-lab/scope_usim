@@ -98,6 +98,7 @@ COOPERBENCH_ARGS=(
    --cooperbench-max-context-length 20480
    --cooperbench-max-tokens-per-turn 4096
    --cooperbench-max-tool-output-chars 4000
+   --cooperbench-patch-bonus 0.1
 )
 
 PERF_ARGS=(

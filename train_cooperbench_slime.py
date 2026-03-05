@@ -139,6 +139,13 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> argparse.Argum
     )
 
     group.add_argument(
+        "--cooperbench-patch-bonus",
+        type=float,
+        default=0.1,
+        help="Reward bonus for non-empty patch when tests fail (default: 0.1)",
+    )
+
+    group.add_argument(
         "--docent-collection",
         type=str,
         default=None,

@@ -121,22 +121,31 @@ async def _baseline_single(
 
         # Get patch and compute reward (runs in thread pool, doesn't block event loop)
         agent_patch = await environment.get_patch()
-        reward = await compute_baseline_reward_async(
-            repo_name=repo,
-            task_id=task_id,
-            feature_id=agent_feature_id,
-            patch=agent_patch,
-            dataset_dir=dataset_dir,
-            backend=backend,
-        )
+        patch_bonus = getattr(args, "cooperbench_patch_bonus", 0.1)
+
+        if not agent_patch.strip():
+            reward = 0.0
+        else:
+            reward = await compute_baseline_reward_async(
+                repo_name=repo,
+                task_id=task_id,
+                feature_id=agent_feature_id,
+                patch=agent_patch,
+                dataset_dir=dataset_dir,
+                backend=backend,
+            )
+            if reward == 0.0 and patch_bonus > 0:
+                reward = patch_bonus  # Non-empty patch but tests fail
 
         trajectory.reward = reward
         trajectory.metadata["agent_patch_lines"] = len(agent_patch.splitlines())
+        trajectory.metadata["has_patch"] = bool(agent_patch.strip())
         trajectory.metadata["setting"] = "baseline"
 
         logger.info(
             f"[CB] Baseline {sample.index}: {trajectory.turn_count} steps, "
-            f"reward={reward:.1f}, status={trajectory.status}"
+            f"reward={reward:.2f}, patch_lines={len(agent_patch.splitlines())}, "
+            f"status={trajectory.status}"
         )
 
         return trajectory_to_slime_sample(trajectory, sample.index)
