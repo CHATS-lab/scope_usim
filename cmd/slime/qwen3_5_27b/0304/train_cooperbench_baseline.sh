@@ -42,10 +42,12 @@ echo "Installing usim..."
 pip install -e "${PROJECT_ROOT}" 2>&1 | tail -3
 echo "Installing CooperBench..."
 pip install -e "${COOPERBENCH_DIR}" 2>&1 | tail -5
-echo "Re-installing slime (fix dep conflicts)..."
+echo "Re-installing slime + sglang deps (fix version conflicts)..."
 pip install -e "${SLIME_DIR}" 2>&1 | tail -3
-# Pin transformers to version required by sglang
-pip install transformers==4.57.1 2>&1 | tail -2
+# Pin versions required by sglang 0.5.9 (cooperbench upgrades these)
+pip install transformers==4.57.1 openai==2.6.1 nvidia-cudnn-cu12==9.16.0.29 2>&1 | tail -3
+# Verify slime is importable
+python3 -c "import slime; print(f'slime {slime.__version__} OK')" || { echo "FATAL: slime import failed"; exit 1; }
 
 # === Dataset setup ===
 if [ ! -d "${COOPERBENCH_DIR}/dataset" ]; then
