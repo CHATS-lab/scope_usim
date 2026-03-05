@@ -97,7 +97,7 @@ COOPERBENCH_ARGS=(
 )
 
 PERF_ARGS=(
-   --tensor-model-parallel-size 4
+   --tensor-model-parallel-size 8
    --sequence-parallel
    --pipeline-model-parallel-size 1
    --context-parallel-size 1
@@ -151,6 +151,7 @@ SGLANG_ARGS=(
 MISC_ARGS=(
    --attention-dropout 0.0
    --hidden-dropout 0.0
+   --accumulate-allreduce-grads-in-fp32
    --attention-softmax-in-fp32
    --attention-backend flash
 )
