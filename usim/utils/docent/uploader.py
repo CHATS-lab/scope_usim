@@ -18,7 +18,7 @@ try:
     from usim.utils.docent.converter import load_jsonl_directory, sample_to_agent_run
 
     _HAS_DOCENT = True
-except ImportError:
+except Exception:
     _HAS_DOCENT = False
 
 logger = logging.getLogger(__name__)

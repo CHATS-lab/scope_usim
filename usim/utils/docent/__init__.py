@@ -5,7 +5,7 @@ try:
         sample_to_agent_run,
     )
     from usim.utils.docent.uploader import DocentUploader, upload_from_directory
-except ImportError:
+except Exception:
     pass
 
 from usim.utils.docent.uploader import get_docent_uploader
