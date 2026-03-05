@@ -205,7 +205,8 @@ class CodingAgentOrchestrator:
         max_steps = self.config.max_turns
         max_context = getattr(self.config, "max_context_length", 0) or 32768
         status = TrajectoryStatus.TRUNCATED
-        context_warning_injected = False
+        has_written_code = False
+        coding_nudge_injected = False
 
         for step in range(max_steps):
             step_count = step + 1
@@ -219,24 +220,24 @@ class CodingAgentOrchestrator:
                 status = TrajectoryStatus.TRUNCATED
                 break
 
-            # Inject context budget warning at ~60% usage to encourage coding
-            context_usage = len(all_tokens) / max_context
-            if not context_warning_injected and context_usage > 0.6:
-                context_warning_injected = True
-                remaining_pct = int((1 - context_usage) * 100)
-                warn_content = (
-                    f"<important>WARNING: You have used {int(context_usage * 100)}% of your context budget "
-                    f"(~{remaining_pct}% remaining). If you haven't started writing code yet, "
-                    f"START NOW. Write/edit files immediately, then submit with "
-                    f"`echo {STOP_SIGNAL}`. Do not read more files.</important>"
+            # After step 2 (i.e. at step 3+), if no write has occurred, inject a strong nudge
+            if step_count >= 3 and not has_written_code and not coding_nudge_injected:
+                coding_nudge_injected = True
+                nudge_content = (
+                    f"<important>STOP EXPLORING. You have spent {step_count - 1} steps reading files "
+                    f"without writing any code. You are running out of context. "
+                    f"You MUST write code NOW using `sed -i` or `cat <<'EOF' > file`. "
+                    f"Then submit with `echo {STOP_SIGNAL}`. "
+                    f"If you do another read-only command, you will run out of context and fail.</important>"
                 )
-                warn_msg = Message(role="user", content=warn_content)
-                agent_state = agent_state.add_message(warn_msg)
-                messages.append(warn_msg.to_dict())
-                warn_delta, warn_mask = self._get_token_delta(messages, "user")
-                all_tokens.extend(warn_delta)
-                all_masks.extend(warn_mask)
-                all_logprobs.extend([0.0] * len(warn_delta))
+                nudge_msg = Message(role="user", content=nudge_content)
+                agent_state = agent_state.add_message(nudge_msg)
+                messages.append(nudge_msg.to_dict())
+                nudge_delta, nudge_mask = self._get_token_delta(messages, "user")
+                all_tokens.extend(nudge_delta)
+                all_masks.extend(nudge_mask)
+                all_logprobs.extend([0.0] * len(nudge_delta))
+                logger.info(f"[step {step_count}] Injected coding nudge (no writes after {step_count - 1} steps)")
 
             # === AGENT TURN: generate response ===
             agent_msgs = agent.build_messages(agent_state)
@@ -321,11 +322,16 @@ class CodingAgentOrchestrator:
                 if name == "bash":
                     command = args.get("command", "").strip() if isinstance(args, dict) else ""
                     is_write = any(
-                        k in command for k in ("cat >", "cat <<", "sed -i", "echo >", "tee ", "patch ", "> ")
+                        k in command for k in (
+                            "cat >", "cat <<", "sed -i", "echo >", "tee ",
+                            "patch ", "> ", ">>", "printf ", "cp ", "mv ",
+                        )
                     )
+                    if is_write:
+                        has_written_code = True
                     logger.info(
                         f"[step {step_count}] bash({'W' if is_write else 'R'}): "
-                        f"{command[:120]}{'...' if len(command) > 120 else ''}"
+                        f"{command[:200]}{'...' if len(command) > 200 else ''}"
                     )
                     if STOP_SIGNAL in command:
                         stop = True
