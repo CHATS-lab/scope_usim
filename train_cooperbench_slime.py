@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> None:
+def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add CooperBench-specific arguments to the parser."""
     group = parser.add_argument_group("cooperbench", "CooperBench arguments")
 
@@ -115,6 +115,8 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> None:
         default=1,
         help="Upload to Docent every N rollouts (default: 1)",
     )
+
+    return parser
 
 
 def main() -> None:

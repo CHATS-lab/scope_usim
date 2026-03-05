@@ -388,3 +388,5 @@ def add_p4g_arguments(parser: Any) -> None:
         default=1,
         help="Upload to Docent every N rollouts (default: 1)",
     )
+
+    return parser
