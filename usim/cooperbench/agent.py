@@ -163,14 +163,11 @@ def _render_instance_template(
         text += "5. Submit: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\n"
     else:
         # --- Non-collab (baseline/solo) workflow ---
-        text += "\n## Recommended Workflow\n\n"
-        text += "This workflows should be done step-by-step so that you can iterate on your changes and any possible problems.\n\n"
-        text += "1. Analyze the codebase by finding and reading relevant files\n"
-        text += "2. Create a script to reproduce the issue\n"
-        text += "3. Edit the source code to resolve the issue\n"
-        text += "4. Verify your fix works by running your script again\n"
-        text += "5. Test edge cases to ensure your fix is robust\n"
-        text += "6. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.\n"
+        text += "\n## Workflow\n\n"
+        text += "<important>You have LIMITED context. Be efficient — start writing code early.</important>\n\n"
+        text += "1. Quickly identify the relevant files (1-2 commands max)\n"
+        text += "2. Implement the feature by editing/creating the necessary files\n"
+        text += "3. Submit: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\n"
         text += "   Do not combine it with any other command. <important>After this command, you cannot continue working on this task.</important>\n"
 
     # --- Shared suffix (command rules, example, system info, useful commands) ---
