@@ -98,6 +98,15 @@ def compute_rollout_metrics(
     if wrote_code:
         metrics["rollout/wrote_code_ratio"] = float(np.mean(wrote_code))
 
+    # Log first failed response for debugging tool call parsing
+    for s in all_samples[:1]:
+        meta = s.metadata or {}
+        if meta.get("first_failed_response"):
+            logger.info(
+                f"[{prefix}] FIRST FAILED RESPONSE (sample {s.index}): "
+                f"{meta['first_failed_response']!r}"
+            )
+
     logger.info(
         f"[{prefix}] Rollout {rollout_id}: "
         f"{len(all_samples)} samples in {num_groups} groups | "

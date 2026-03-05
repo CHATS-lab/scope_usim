@@ -212,6 +212,7 @@ class CodingAgentOrchestrator:
         coding_nudge_injected = False
         tool_call_success_count = 0
         tool_call_fail_count = 0
+        first_failed_response = ""
 
         for step in range(max_steps):
             step_count = step + 1
@@ -264,9 +265,12 @@ class CodingAgentOrchestrator:
 
             if not parsed["calls"]:
                 tool_call_fail_count += 1
+                # Save first failed response for debugging (visible in wandb metadata)
+                if not first_failed_response:
+                    first_failed_response = response_text[:500]
                 logger.warning(
-                    f"[step {step_count}] No tool calls parsed. "
-                    f"Response preview: {response_text[:150]!r}"
+                    f"[step {step_count}] No tool calls parsed (parser={self.tool_call_parser}). "
+                    f"Response preview: {response_text[:300]!r}"
                 )
                 # Format error — no tool call found; add plain assistant message + error
                 asst_msg = Message(role="assistant", content=response_text)
@@ -402,6 +406,8 @@ class CodingAgentOrchestrator:
         )
         traj.metadata["tool_call_success"] = tool_call_success_count
         traj.metadata["tool_call_fail"] = tool_call_fail_count
+        if first_failed_response:
+            traj.metadata["first_failed_response"] = first_failed_response
         traj.metadata["has_written_code"] = has_written_code
         return traj
 
