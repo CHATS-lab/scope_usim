@@ -36,10 +36,16 @@ WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 mkdir -p "${OUTPUT_DIR}"
 
 # === Install CooperBench + usim dependencies ===
+# Order matters: install cooperbench first (heavy deps), then reinstall slime last
+# to fix any dependency clobbering (especially transformers version).
 echo "Installing usim..."
 pip install -e "${PROJECT_ROOT}" 2>&1 | tail -3
 echo "Installing CooperBench..."
 pip install -e "${COOPERBENCH_DIR}" 2>&1 | tail -5
+echo "Re-installing slime (fix dep conflicts)..."
+pip install -e "${SLIME_DIR}" 2>&1 | tail -3
+# Pin transformers to version required by sglang
+pip install transformers==4.57.1 2>&1 | tail -2
 
 # === Dataset setup ===
 if [ ! -d "${COOPERBENCH_DIR}/dataset" ]; then
