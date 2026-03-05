@@ -97,6 +97,13 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
     group.add_argument(
+        "--cooperbench-sample-timeout",
+        type=int,
+        default=5400,
+        help="Per-sample timeout in seconds (default: 5400 = sandbox 3600 + reward eval buffer)",
+    )
+
+    group.add_argument(
         "--docent-collection",
         type=str,
         default=None,

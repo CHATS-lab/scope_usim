@@ -7,6 +7,11 @@ All eval functions are synchronous and use os.chdir to the dataset directory
 (CooperBench hardcodes Path("dataset") / ... relative paths). A module-level
 lock serializes chdir + eval to avoid race conditions when called from threads
 via asyncio.to_thread().
+
+TODO: Replace lock with subprocess/ProcessPoolExecutor for parallel reward eval.
+The lock serializes all evals which is slow with large batch sizes (64 samples →
+~30-60 min sequential). Subprocess approach needs to handle large patches
+(100KB+) via temp files to avoid ARG_MAX limits.
 """
 
 import asyncio

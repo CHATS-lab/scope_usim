@@ -45,6 +45,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _get_or_create_model_adapter(args: Any) -> Any:
+    """Get or create a shared SlimeModelAdapter (cached on args)."""
+    if not hasattr(args, "_cached_model_adapter"):
+        args._cached_model_adapter = create_slime_model_adapter(args)
+    return args._cached_model_adapter
+
+
 async def _baseline_single(
     args: Any,
     sample: Sample,
@@ -82,8 +89,7 @@ async def _baseline_single(
             "instructions": agent.get_task_message(task_description),
         }
 
-        # Use existing SlimeModelAdapter (handles SGLang HTTP, tokenizer, logprobs)
-        model_adapter = create_slime_model_adapter(args)
+        model_adapter = _get_or_create_model_adapter(args)
 
         config = UserSimConfig(
             trainable_role=TrainableRole(getattr(args, "trainable_role", "agent")),
@@ -168,7 +174,7 @@ async def _solo_single(
             "instructions": agent.get_solo_task_message(descriptions),
         }
 
-        model_adapter = create_slime_model_adapter(args)
+        model_adapter = _get_or_create_model_adapter(args)
 
         config = UserSimConfig(
             trainable_role=TrainableRole(getattr(args, "trainable_role", "agent")),
@@ -307,7 +313,7 @@ async def _coop_single(
             "instructions": agent.get_task_message(task_description),
         }
 
-        model_adapter = create_slime_model_adapter(args)
+        model_adapter = _get_or_create_model_adapter(args)
 
         config = UserSimConfig(
             trainable_role=TrainableRole(getattr(args, "trainable_role", "agent")),
@@ -378,6 +384,26 @@ async def _coop_single(
 # ---------------------------------------------------------------------------
 
 
+async def _run_single_with_timeout(
+    fn: Any,
+    args: Any,
+    sample: Sample,
+    sampling_params: Dict[str, Any],
+    timeout: int,
+) -> Sample:
+    """Run a single rollout with a timeout. Returns error sample on timeout."""
+    try:
+        return await asyncio.wait_for(
+            fn(args, sample, sampling_params),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            f"Sample {sample.index} timed out after {timeout}s"
+        )
+        return _error_sample(sample, f"Timed out after {timeout}s")
+
+
 async def _run_batch_async(
     args: Namespace,
     samples: List[List[Sample]],
@@ -391,6 +417,9 @@ async def _run_batch_async(
         max_new_tokens=getattr(args, "rollout_max_response_len", 4096),
     )
 
+    # Per-sample timeout: sandbox timeout (3600) + buffer for reward eval
+    sample_timeout = getattr(args, "cooperbench_sample_timeout", 5400)
+
     dispatch = {
         "baseline": _baseline_single,
         "solo": _solo_single,
@@ -401,7 +430,9 @@ async def _run_batch_async(
     tasks = []
     for group in samples:
         for sample in group:
-            tasks.append(fn(args, sample, sampling_params))
+            tasks.append(
+                _run_single_with_timeout(fn, args, sample, sampling_params, sample_timeout)
+            )
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 

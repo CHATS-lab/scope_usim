@@ -200,10 +200,20 @@ class CodingAgentOrchestrator:
         # Main coding loop
         step_count = 0
         max_steps = self.config.max_turns
+        max_context = getattr(self.config, "max_context_length", 0) or 32768
         status = TrajectoryStatus.TRUNCATED
 
         for step in range(max_steps):
             step_count = step + 1
+
+            # Check context length — truncate if approaching limit
+            if len(all_tokens) + self.config.max_tokens > max_context:
+                logger.warning(
+                    f"Context length ({len(all_tokens)} tokens) approaching limit "
+                    f"({max_context}), truncating at step {step_count}"
+                )
+                status = TrajectoryStatus.TRUNCATED
+                break
 
             # === AGENT TURN: generate response ===
             agent_msgs = agent.build_messages(agent_state)
