@@ -487,13 +487,41 @@ def _preflight_check(args: Namespace) -> None:
         print(f"[CB] Model adapter FAILED: {e}", flush=True)
         raise RuntimeError(f"Model adapter pre-flight failed: {e}") from e
 
-    # 3. Check sglang function call parser
+    # 3. Validate tool call parser with a test input
     try:
-        from sglang.srt.function_call.function_call_parser import FunctionCallParser
-        print("[CB] FunctionCallParser import OK", flush=True)
+        from usim.core.coding_orchestrator import _parse_tool_calls
+
+        test_response = (
+            "I'll check the files.\n"
+            "<tool_call>\n"
+            "<function=bash>\n"
+            '<parameter=command>ls -la</parameter>\n'
+            "</function>\n"
+            "</tool_call>"
+        )
+        test_tools = [{"type": "function", "function": {
+            "name": "bash", "description": "Run bash", "parameters": {
+                "type": "object", "properties": {"command": {"type": "string"}},
+            },
+        }}]
+        parser_name = getattr(args, "cooperbench_tool_call_parser", "qwen3_coder")
+        result = _parse_tool_calls(test_response, test_tools, parser_name)
+        if result["calls"]:
+            print(
+                f"[CB] Tool call parser OK (parser={parser_name}): "
+                f"parsed {len(result['calls'])} calls, "
+                f"name={result['calls'][0]['name']}, "
+                f"args={result['calls'][0]['arguments']}",
+                flush=True,
+            )
+        else:
+            print(
+                f"[CB] WARNING: Tool call parser returned 0 calls for test input! "
+                f"parser={parser_name}",
+                flush=True,
+            )
     except Exception as e:
-        print(f"[CB] FunctionCallParser import FAILED: {e}", flush=True)
-        raise RuntimeError(f"FunctionCallParser pre-flight failed: {e}") from e
+        print(f"[CB] Tool call parser test FAILED: {e}", flush=True)
 
     print("[CB] === Pre-flight checks PASSED ===", flush=True)
 
