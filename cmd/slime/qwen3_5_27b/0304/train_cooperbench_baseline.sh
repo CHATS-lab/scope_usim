@@ -42,10 +42,10 @@ echo "Installing usim..."
 pip install -e "${PROJECT_ROOT}" 2>&1 | tail -3
 echo "Installing CooperBench..."
 pip install -e "${COOPERBENCH_DIR}" 2>&1 | tail -5
-echo "Re-installing slime + sglang deps (fix version conflicts)..."
+echo "Re-installing slime + fixing deps..."
 pip install -e "${SLIME_DIR}" 2>&1 | tail -3
-# Pin versions required by sglang 0.5.9 (cooperbench upgrades these)
-pip install transformers==4.57.1 openai==2.6.1 nvidia-cudnn-cu12==9.16.0.29 2>&1 | tail -3
+# Qwen3.5 needs latest transformers; pin openai for sglang; restore cudnn 9.16
+pip install --upgrade transformers openai==2.6.1 nvidia-cudnn-cu12==9.16.0.29 2>&1 | tail -3
 # Verify slime is importable
 python3 -c "from slime.train_async import parse_args, train; print('slime import OK')" || { echo "FATAL: slime import failed"; exit 1; }
 
