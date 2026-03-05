@@ -40,25 +40,34 @@ You are operating in an environment where you issue bash commands via tool calls
 ## Example: Complete Coding Workflow
 
 ### Step 1 — Quick look at the target file:
-<example_response>
+
 The task says to modify `src/utils.py`. Let me check its current contents.
 
-[Makes bash tool call with {"command": "cat src/utils.py"} as arguments]
-</example_response>
+<tool_call>
+<function=bash>
+<parameter=command>cat src/utils.py</parameter>
+</function>
+</tool_call>
 
 ### Step 2 — Write the code (use sed or cat to edit/create files):
-<example_response>
+
 I can see the existing code. I'll add the new function after line 15.
 
-[Makes bash tool call with {"command": "sed -i '15a\\\\ndef new_feature():\\n    return 42' src/utils.py"} as arguments]
-</example_response>
+<tool_call>
+<function=bash>
+<parameter=command>sed -i '15a\\def new_feature():\\n    return 42' src/utils.py</parameter>
+</function>
+</tool_call>
 
 ### Step 3 — Submit:
-<example_response>
+
 The changes are implemented. Time to submit.
 
-[Makes bash tool call with {"command": "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"} as arguments]
-</example_response>
+<tool_call>
+<function=bash>
+<parameter=command>echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT</parameter>
+</function>
+</tool_call>
 
 <system_information>
 %s
