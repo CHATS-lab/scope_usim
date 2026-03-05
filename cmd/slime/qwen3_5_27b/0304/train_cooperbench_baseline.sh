@@ -80,7 +80,7 @@ ROLLOUT_ARGS=(
    --num-rollout 500
    --rollout-batch-size 8
    --n-samples-per-prompt 4
-   --rollout-max-response-len 4096
+   --rollout-max-response-len 8192
    --rollout-temperature 0.7
    --global-batch-size 32
    --balance-data
@@ -95,7 +95,7 @@ COOPERBENCH_ARGS=(
    --cooperbench-max-steps 50
    --cooperbench-dataset-dir "${COOPERBENCH_DIR}"
    --cooperbench-max-concurrent 16
-   --cooperbench-max-context-length 16384
+   --cooperbench-max-context-length 32768
 )
 
 PERF_ARGS=(
