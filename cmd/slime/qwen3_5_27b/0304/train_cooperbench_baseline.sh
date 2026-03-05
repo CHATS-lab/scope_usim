@@ -99,7 +99,7 @@ COOPERBENCH_ARGS=(
    --cooperbench-max-tokens-per-turn 4096
    --cooperbench-max-tool-output-chars 4000
    --cooperbench-patch-bonus 0.1
-   --cooperbench-tool-call-parser qwen25
+   --cooperbench-tool-call-parser qwen3_coder
 )
 
 PERF_ARGS=(

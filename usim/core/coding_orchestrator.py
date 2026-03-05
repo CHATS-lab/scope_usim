@@ -34,7 +34,7 @@ STOP_SIGNAL = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
 def _parse_tool_calls(
     response_text: str,
     tools_schema: List[Dict[str, Any]],
-    tool_call_parser: str = "qwen25",
+    tool_call_parser: str = "qwen3_coder",
 ) -> Dict[str, Any]:
     """Parse tool calls from agent response using sglang's FunctionCallParser.
 
@@ -142,7 +142,7 @@ class CodingAgentOrchestrator:
         config: UserSimConfig,
         environment: Any,
         messaging: Optional[Any] = None,
-        tool_call_parser: str = "qwen25",
+        tool_call_parser: str = "qwen3_coder",
         chat_template_kwargs: Optional[Dict[str, Any]] = None,
         max_tool_output_chars: int = 4000,
     ):
