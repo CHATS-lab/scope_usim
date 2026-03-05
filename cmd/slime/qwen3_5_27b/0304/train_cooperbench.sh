@@ -165,8 +165,15 @@ if [ "${SETTING}" = "coop" ]; then
     fi
 fi
 
-# === Modal setup ===
-modal setup 2>/dev/null || echo "Modal already configured or not available"
+# === Modal auth ===
+MODAL_TOKEN_ID="${MODAL_TOKEN_ID:-}"
+MODAL_TOKEN_SECRET="${MODAL_TOKEN_SECRET:-}"
+if [ -n "$MODAL_TOKEN_ID" ] && [ -n "$MODAL_TOKEN_SECRET" ]; then
+    modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+    echo "Modal token configured via env vars"
+else
+    echo "WARNING: MODAL_TOKEN_ID/SECRET not set — sandbox creation will fail"
+fi
 
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265
@@ -175,7 +182,9 @@ RUNTIME_ENV_JSON="{
   \"env_vars\": {
     \"PYTHONPATH\": \"/root/Megatron-LM/\",
     \"CUDA_DEVICE_MAX_CONNECTIONS\": \"1\",
-    \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\"
+    \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\",
+    \"MODAL_TOKEN_ID\": \"${MODAL_TOKEN_ID}\",
+    \"MODAL_TOKEN_SECRET\": \"${MODAL_TOKEN_SECRET}\"
   }
 }"
 

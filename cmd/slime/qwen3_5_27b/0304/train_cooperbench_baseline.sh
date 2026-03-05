@@ -157,10 +157,15 @@ MISC_ARGS=(
 )
 
 # === Modal auth ===
-# When running inside a Modal container, the SDK auto-authenticates.
-# Propagate Modal env vars to Ray workers so sandbox creation works.
+# Configure Modal token for sandbox creation (nested Modal).
 MODAL_TOKEN_ID="${MODAL_TOKEN_ID:-}"
 MODAL_TOKEN_SECRET="${MODAL_TOKEN_SECRET:-}"
+if [ -n "$MODAL_TOKEN_ID" ] && [ -n "$MODAL_TOKEN_SECRET" ]; then
+    modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+    echo "Modal token configured via env vars"
+else
+    echo "WARNING: MODAL_TOKEN_ID/SECRET not set — sandbox creation will fail"
+fi
 
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265

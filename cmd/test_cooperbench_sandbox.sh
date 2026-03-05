@@ -17,7 +17,12 @@ pip install modal 2>&1 | tail -3
 echo "=== Modal auth check ==="
 echo "MODAL_TOKEN_ID set: $([ -n "$MODAL_TOKEN_ID" ] && echo yes || echo no)"
 echo "MODAL_TOKEN_SECRET set: $([ -n "$MODAL_TOKEN_SECRET" ] && echo yes || echo no)"
-modal setup 2>/dev/null || echo "Modal setup skipped"
+if [ -n "$MODAL_TOKEN_ID" ] && [ -n "$MODAL_TOKEN_SECRET" ]; then
+    modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+    echo "Modal token configured via env vars"
+else
+    echo "WARNING: Modal tokens not set, sandbox creation will fail"
+fi
 
 echo "=== Running single task test ==="
 cd "${PROJECT_ROOT}"
