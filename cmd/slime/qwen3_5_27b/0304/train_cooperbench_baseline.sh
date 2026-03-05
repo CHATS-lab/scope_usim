@@ -95,7 +95,7 @@ COOPERBENCH_ARGS=(
    --cooperbench-max-steps 50
    --cooperbench-dataset-dir "${COOPERBENCH_DIR}"
    --cooperbench-max-concurrent 16
-   --cooperbench-max-context-length 20480
+   --cooperbench-max-context-length 40960
    --cooperbench-max-tokens-per-turn 4096
    --cooperbench-max-tool-output-chars 4000
    --cooperbench-patch-bonus 0.1
@@ -105,8 +105,8 @@ COOPERBENCH_ARGS=(
 PERF_ARGS=(
    --tensor-model-parallel-size 4
    --sequence-parallel
-   --pipeline-model-parallel-size 2
-   --context-parallel-size 1
+   --pipeline-model-parallel-size 1
+   --context-parallel-size 2
    --use-dynamic-batch-size
    --max-tokens-per-gpu 2048
    --recompute-granularity full
