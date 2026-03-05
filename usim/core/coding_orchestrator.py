@@ -210,6 +210,8 @@ class CodingAgentOrchestrator:
         status = TrajectoryStatus.TRUNCATED
         has_written_code = False
         coding_nudge_injected = False
+        tool_call_success_count = 0
+        tool_call_fail_count = 0
 
         for step in range(max_steps):
             step_count = step + 1
@@ -261,6 +263,11 @@ class CodingAgentOrchestrator:
             parsed = _parse_tool_calls(response_text, self._tools_schema, self.tool_call_parser)
 
             if not parsed["calls"]:
+                tool_call_fail_count += 1
+                logger.warning(
+                    f"[step {step_count}] No tool calls parsed. "
+                    f"Response preview: {response_text[:150]!r}"
+                )
                 # Format error — no tool call found; add plain assistant message + error
                 asst_msg = Message(role="assistant", content=response_text)
                 agent_state = agent_state.add_message(asst_msg)
@@ -295,6 +302,7 @@ class CodingAgentOrchestrator:
                 continue
 
             # Build assistant message with tool_calls
+            tool_call_success_count += 1
             tool_calls = [
                 ToolCall(
                     id=call.get("id", f"call_{step}_{i}"),
@@ -383,9 +391,19 @@ class CodingAgentOrchestrator:
             agent_state,
         )
 
-        return self._build_trajectory(
+        logger.info(
+            f"Session done: steps={step_count}, status={status.value}, "
+            f"tool_ok={tool_call_success_count}, tool_fail={tool_call_fail_count}, "
+            f"wrote_code={has_written_code}, tokens={len(all_tokens)}"
+        )
+
+        traj = self._build_trajectory(
             all_tokens, all_masks, all_logprobs, messages, step_count, task, status,
         )
+        traj.metadata["tool_call_success"] = tool_call_success_count
+        traj.metadata["tool_call_fail"] = tool_call_fail_count
+        traj.metadata["has_written_code"] = has_written_code
+        return traj
 
     # === Helper methods ===
 

@@ -61,6 +61,43 @@ def compute_rollout_metrics(
         "rollout/zero_std_group_pct": zero_std_pct,
     }
 
+    # CooperBench-specific metrics from trajectory metadata
+    has_patch_flags = [
+        s.metadata.get("has_patch", False)
+        for s in all_samples
+        if hasattr(s, "metadata") and s.metadata
+    ]
+    patch_lines = [
+        s.metadata.get("agent_patch_lines", 0)
+        for s in all_samples
+        if hasattr(s, "metadata") and s.metadata
+    ]
+    tool_ok = [
+        s.metadata.get("tool_call_success", 0)
+        for s in all_samples
+        if hasattr(s, "metadata") and s.metadata
+    ]
+    tool_fail = [
+        s.metadata.get("tool_call_fail", 0)
+        for s in all_samples
+        if hasattr(s, "metadata") and s.metadata
+    ]
+    wrote_code = [
+        s.metadata.get("has_written_code", False)
+        for s in all_samples
+        if hasattr(s, "metadata") and s.metadata
+    ]
+    if has_patch_flags:
+        metrics["rollout/has_patch_ratio"] = float(np.mean(has_patch_flags))
+    if patch_lines:
+        metrics["rollout/patch_lines/mean"] = float(np.mean(patch_lines))
+    if tool_ok:
+        metrics["rollout/tool_call_ok/mean"] = float(np.mean(tool_ok))
+    if tool_fail:
+        metrics["rollout/tool_call_fail/mean"] = float(np.mean(tool_fail))
+    if wrote_code:
+        metrics["rollout/wrote_code_ratio"] = float(np.mean(wrote_code))
+
     logger.info(
         f"[{prefix}] Rollout {rollout_id}: "
         f"{len(all_samples)} samples in {num_groups} groups | "
@@ -72,6 +109,12 @@ def compute_rollout_metrics(
         f"failed={metrics['rollout/failed_ratio']:.1%} | "
         f"zero_std_groups={zero_std_pct:.1%} ({zero_std_groups}/{num_groups})"
     )
+    if has_patch_flags:
+        logger.info(
+            f"[{prefix}] Patches: {sum(has_patch_flags)}/{len(has_patch_flags)} samples, "
+            f"tool_ok={sum(tool_ok):.0f} tool_fail={sum(tool_fail):.0f} "
+            f"wrote_code={sum(wrote_code)}/{len(wrote_code)}"
+        )
 
     # Debug: log first few samples
     for s in all_samples[:3]:
