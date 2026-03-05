@@ -35,6 +35,12 @@ WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
 
+# === Install CooperBench + usim dependencies ===
+echo "Installing usim..."
+pip install -e "${PROJECT_ROOT}" 2>&1 | tail -3
+echo "Installing CooperBench..."
+pip install -e "${COOPERBENCH_DIR}" 2>&1 | tail -5
+
 # === Dataset setup ===
 if [ ! -d "${COOPERBENCH_DIR}/dataset" ]; then
     echo "Downloading CooperBench dataset..."
@@ -142,8 +148,11 @@ MISC_ARGS=(
    --attention-backend flash
 )
 
-# === Modal setup ===
-modal setup 2>/dev/null || echo "Modal already configured or not available"
+# === Modal auth ===
+# When running inside a Modal container, the SDK auto-authenticates.
+# Propagate Modal env vars to Ray workers so sandbox creation works.
+MODAL_TOKEN_ID="${MODAL_TOKEN_ID:-}"
+MODAL_TOKEN_SECRET="${MODAL_TOKEN_SECRET:-}"
 
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265
@@ -152,7 +161,9 @@ RUNTIME_ENV_JSON="{
   \"env_vars\": {
     \"PYTHONPATH\": \"${PROJECT_ROOT}:${SLIME_DIR}:${COOPERBENCH_DIR}/src\",
     \"CUDA_DEVICE_MAX_CONNECTIONS\": \"1\",
-    \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\"
+    \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\",
+    \"MODAL_TOKEN_ID\": \"${MODAL_TOKEN_ID}\",
+    \"MODAL_TOKEN_SECRET\": \"${MODAL_TOKEN_SECRET}\"
   }
 }"
 
