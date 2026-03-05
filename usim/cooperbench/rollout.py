@@ -130,7 +130,11 @@ async def _baseline_single(
         return trajectory_to_slime_sample(trajectory, sample.index)
 
     except Exception as e:
-        logger.error(f"Baseline rollout failed (sample {sample.index}): {e}", exc_info=True)
+        import traceback
+        err_msg = f"Baseline rollout failed (sample {sample.index}): {e}"
+        logger.error(err_msg, exc_info=True)
+        print(f"[CB ERROR] {err_msg}", flush=True)
+        traceback.print_exc()
         return _error_sample(sample, str(e))
     finally:
         if environment:
@@ -216,7 +220,11 @@ async def _solo_single(
         return trajectory_to_slime_sample(trajectory, sample.index)
 
     except Exception as e:
-        logger.error(f"Solo rollout failed (sample {sample.index}): {e}", exc_info=True)
+        import traceback
+        err_msg = f"Solo rollout failed (sample {sample.index}): {e}"
+        logger.error(err_msg, exc_info=True)
+        print(f"[CB ERROR] {err_msg}", flush=True)
+        traceback.print_exc()
         return _error_sample(sample, str(e))
     finally:
         if environment:
@@ -369,7 +377,11 @@ async def _coop_single(
         return trajectory_to_slime_sample(trajectory, sample.index)
 
     except Exception as e:
-        logger.error(f"Coop rollout failed (sample {sample.index}): {e}", exc_info=True)
+        import traceback
+        err_msg = f"Coop rollout failed (sample {sample.index}): {e}"
+        logger.error(err_msg, exc_info=True)
+        print(f"[CB ERROR] {err_msg}", flush=True)
+        traceback.print_exc()
         return _error_sample(sample, str(e))
     finally:
         if environment:
@@ -402,6 +414,49 @@ async def _run_single_with_timeout(
             f"Sample {sample.index} timed out after {timeout}s"
         )
         return _error_sample(sample, f"Timed out after {timeout}s")
+
+
+def _preflight_check(args: Namespace) -> None:
+    """Quick check that Modal auth + model adapter work before running full batch.
+
+    Raises on failure so the error is visible before we launch 64 concurrent tasks.
+    """
+    import os
+
+    print("[CB] === Pre-flight checks ===", flush=True)
+
+    # 1. Check Modal auth
+    print(f"[CB] MODAL_TOKEN_ID set: {bool(os.environ.get('MODAL_TOKEN_ID'))}", flush=True)
+    print(f"[CB] MODAL_TOKEN_SECRET set: {bool(os.environ.get('MODAL_TOKEN_SECRET'))}", flush=True)
+    try:
+        import modal
+        print(f"[CB] modal version: {modal.__version__}", flush=True)
+        app = modal.App.lookup("cooperbench", create_if_missing=True)
+        print(f"[CB] Modal auth OK, app={app}", flush=True)
+    except Exception as e:
+        print(f"[CB] Modal auth FAILED: {e}", flush=True)
+        raise RuntimeError(f"Modal pre-flight failed: {e}") from e
+
+    # 2. Check model adapter
+    try:
+        adapter = _get_or_create_model_adapter(args)
+        print(
+            f"[CB] Model adapter OK: {adapter.router_ip}:{adapter.router_port}",
+            flush=True,
+        )
+    except Exception as e:
+        print(f"[CB] Model adapter FAILED: {e}", flush=True)
+        raise RuntimeError(f"Model adapter pre-flight failed: {e}") from e
+
+    # 3. Check sglang function call parser
+    try:
+        from sglang.srt.function_call.function_call_parser import FunctionCallParser
+        print("[CB] FunctionCallParser import OK", flush=True)
+    except Exception as e:
+        print(f"[CB] FunctionCallParser import FAILED: {e}", flush=True)
+        raise RuntimeError(f"FunctionCallParser pre-flight failed: {e}") from e
+
+    print("[CB] === Pre-flight checks PASSED ===", flush=True)
 
 
 async def _run_batch_async(
@@ -467,6 +522,10 @@ def cooperbench_generate_rollout(
     """Batch-level rollout function for CooperBench."""
     if evaluation:
         return _cooperbench_eval_rollout(args, rollout_id, data_source)
+
+    # Run pre-flight checks on first rollout only
+    if rollout_id == 0:
+        _preflight_check(args)
 
     samples = data_source.get_samples(args.rollout_batch_size)
     grouped_results = asyncio.run(_run_batch_async(args, samples))
