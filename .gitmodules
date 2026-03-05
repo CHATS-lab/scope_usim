@@ -9,4 +9,4 @@
 	url = https://github.com/sierra-research/tau2-bench.git
 [submodule "external/CooperBench"]
 	path = external/CooperBench
-	url = https://github.com/cooperbench/CooperBench.git
+	url = https://github.com/simonucl/CooperBench.git
