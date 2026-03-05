@@ -180,22 +180,19 @@ class CodingAgentOrchestrator:
         all_logprobs: List[float] = []
         messages: List[Dict[str, Any]] = []
 
-        # Get initial prompt tokens from agent's system message (with tool definitions)
-        initial_messages = [msg.to_dict() for msg in agent_state.system_messages]
-        prompt_tokens = self._tokenize_messages(initial_messages)
-        all_tokens.extend(prompt_tokens)
-
         # Add task description as first user message
         task_content = task.get("instructions", "")
         task_msg = Message(role="user", content=task_content)
         agent_state = agent_state.add_message(task_msg)
         messages.append(task_msg.to_dict())
 
-        # Track task message tokens (not trainable)
-        task_delta, task_mask = self._get_token_delta(messages, "user")
-        all_tokens.extend(task_delta)
-        all_masks.extend(task_mask)
-        all_logprobs.extend([0.0] * len(task_delta))
+        # Tokenize system + task message together as prompt
+        # (Qwen3.5 chat template requires a user message to be present)
+        initial_messages = [msg.to_dict() for msg in agent_state.system_messages] + [
+            task_msg.to_dict()
+        ]
+        prompt_tokens = self._tokenize_messages(initial_messages)
+        all_tokens.extend(prompt_tokens)
 
         # Main coding loop
         step_count = 0
