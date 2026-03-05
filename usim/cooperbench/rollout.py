@@ -92,10 +92,11 @@ async def _baseline_single(
 
         model_adapter = _get_or_create_model_adapter(args)
 
+        per_turn_tokens = getattr(args, "cooperbench_max_tokens_per_turn", 4096)
         config = UserSimConfig(
             trainable_role=TrainableRole(getattr(args, "trainable_role", "agent")),
             max_turns=max_steps,
-            max_tokens=getattr(args, "rollout_max_response_len", 8192),
+            max_tokens=per_turn_tokens,
             max_context_length=getattr(args, "cooperbench_max_context_length", 65536),
             temperature=sampling_params.get("temperature", 0.7),
         )
@@ -106,12 +107,14 @@ async def _baseline_single(
         else:
             chat_template_kwargs["enable_thinking"] = False
 
+        max_tool_chars = getattr(args, "cooperbench_max_tool_output_chars", 4000)
         orchestrator = CodingAgentOrchestrator(
             agent_model=model_adapter,
             config=config,
             environment=environment,
             tool_call_parser=tool_call_parser,
             chat_template_kwargs=chat_template_kwargs,
+            max_tool_output_chars=max_tool_chars,
         )
 
         trajectory = await orchestrator.run_session(task, agent)

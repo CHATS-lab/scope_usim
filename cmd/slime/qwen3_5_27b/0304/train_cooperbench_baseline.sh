@@ -96,6 +96,8 @@ COOPERBENCH_ARGS=(
    --cooperbench-dataset-dir "${COOPERBENCH_DIR}"
    --cooperbench-max-concurrent 16
    --cooperbench-max-context-length 32768
+   --cooperbench-max-tokens-per-turn 4096
+   --cooperbench-max-tool-output-chars 4000
 )
 
 PERF_ARGS=(
@@ -104,7 +106,7 @@ PERF_ARGS=(
    --pipeline-model-parallel-size 2
    --context-parallel-size 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 4096
+   --max-tokens-per-gpu 2048
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1

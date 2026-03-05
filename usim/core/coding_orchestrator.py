@@ -89,17 +89,17 @@ def _format_tool_observation(
     output: str,
     returncode: int,
     incoming_messages: Optional[List[Dict[str, Any]]] = None,
+    max_output_len: int = 4000,
 ) -> str:
     """Format command output as JSON tool result (v2 observation_template format)."""
-    max_output_len = 10000
-
     if len(output) < max_output_len:
         obs: Dict[str, Any] = {"returncode": returncode, "output": output}
     else:
+        half = max_output_len // 2
         obs = {
             "returncode": returncode,
-            "output_head": output[:5000],
-            "output_tail": output[-5000:],
+            "output_head": output[:half],
+            "output_tail": output[-half:],
             "elided_chars": len(output) - max_output_len,
             "warning": "Output too long.",
         }
@@ -141,6 +141,7 @@ class CodingAgentOrchestrator:
         messaging: Optional[Any] = None,
         tool_call_parser: str = "glm",
         chat_template_kwargs: Optional[Dict[str, Any]] = None,
+        max_tool_output_chars: int = 4000,
     ):
         """Initialize the coding orchestrator.
 
@@ -152,6 +153,7 @@ class CodingAgentOrchestrator:
             tool_call_parser: sglang parser name for the model's tool call format.
                 "qwen" for Qwen3, "hermes" for Hermes/Mistral, "llama3" for Llama 3.1+.
             chat_template_kwargs: Extra kwargs for apply_chat_template (e.g. enable_thinking=False)
+            max_tool_output_chars: Max chars in tool output before truncation (default: 4000)
         """
         self.agent_model = agent_model
         self.config = config
@@ -160,6 +162,7 @@ class CodingAgentOrchestrator:
         self.tool_call_parser = tool_call_parser
         self._tools_schema = environment.get_tools()
         self._chat_template_kwargs = chat_template_kwargs or {}
+        self._max_tool_output_chars = max_tool_output_chars
 
     async def run_session(
         self,
@@ -307,6 +310,7 @@ class CodingAgentOrchestrator:
                             exec_result["output"],
                             exec_result["returncode"],
                             incoming_msgs if incoming_msgs else None,
+                            max_output_len=self._max_tool_output_chars,
                         )
 
                 elif name == "send_message":

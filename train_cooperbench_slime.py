@@ -125,6 +125,20 @@ def add_cooperbench_arguments(parser: argparse.ArgumentParser) -> argparse.Argum
     )
 
     group.add_argument(
+        "--cooperbench-max-tokens-per-turn",
+        type=int,
+        default=4096,
+        help="Max tokens per agent generation turn (default: 4096)",
+    )
+
+    group.add_argument(
+        "--cooperbench-max-tool-output-chars",
+        type=int,
+        default=4000,
+        help="Max chars in tool output before truncation (default: 4000)",
+    )
+
+    group.add_argument(
         "--docent-collection",
         type=str,
         default=None,
