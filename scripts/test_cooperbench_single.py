@@ -71,75 +71,34 @@ def load_one_task():
 
 async def test_sandbox(task):
     """Create a Modal sandbox and run a few commands."""
-    print("\n=== Step 3a: Raw Modal Sandbox (no wrapper) ===", flush=True)
+    print("\n=== Step 3: CooperBenchSandbox ===", flush=True)
 
-    import modal
     from cooperbench.utils import get_image_name
 
     image_name = get_image_name(task["repo"], task["task_id"])
     print(f"Image: {image_name}", flush=True)
+    from usim.core.environment.cooperbench.sandbox import CooperBenchSandbox
 
-    # Test raw Modal sandbox first (same as interactive test that worked)
-    app = modal.App.lookup("cooperbench", create_if_missing=True)
-    image = modal.Image.from_registry(image_name).entrypoint(["sleep", "infinity"])
+    sandbox = CooperBenchSandbox(image_name=image_name, timeout=600)
     t0 = time.time()
-    sb = modal.Sandbox.create(app=app, image=image, timeout=300)
-    print(f"Raw sandbox created in {time.time() - t0:.1f}s: {sb.object_id}", flush=True)
-    p = sb.exec("bash", "-lc", "pwd && ls")
-    print(f"  stdout: {p.stdout.read()[:300]}", flush=True)
-    print(f"  stderr: {p.stderr.read()[:300]}", flush=True)
-    p.wait()
-    print(f"  returncode: {p.returncode}", flush=True)
-    sb.terminate()
-    print("Raw sandbox OK", flush=True)
+    await sandbox.start()
+    print(f"CooperBenchSandbox started in {time.time() - t0:.1f}s", flush=True)
 
-    # Now test via ModalEnvironment (what training actually uses)
-    # Test 3b: asyncio.to_thread (current code — suspected broken due to cross-thread gRPC)
-    print("\n=== Step 3b: ModalEnvironment via asyncio.to_thread ===", flush=True)
-    from cooperbench.agents.mini_swe_agent_v2.environments.modal import ModalEnvironment
+    print("\n=== Step 4: Execute Commands ===", flush=True)
+    for cmd in ["pwd", "ls -la", "git log --oneline -5"]:
+        print(f"\n$ {cmd}", flush=True)
+        result = await sandbox.execute(cmd)
+        output = result["output"]
+        if len(output) > 500:
+            output = output[:250] + "\n...\n" + output[-250:]
+        print(f"  returncode={result['returncode']}", flush=True)
+        print(f"  output: {output}", flush=True)
 
-    t0 = time.time()
-    env = await asyncio.to_thread(
-        ModalEnvironment, image=image_name, cwd="/workspace/repo", timeout=600
-    )
-    print(f"ModalEnvironment created in {time.time() - t0:.1f}s", flush=True)
+    patch = await sandbox.get_patch()
+    print(f"\nPatch length: {len(patch)} chars", flush=True)
 
-    print("$ pwd (via asyncio.to_thread — may fail due to cross-thread gRPC)", flush=True)
-    try:
-        result = await asyncio.to_thread(env.execute, {"command": "pwd"})
-        print(f"  OK: {result['output'][:100]}", flush=True)
-    except Exception as e:
-        print(f"  FAILED (expected): {e}", flush=True)
-    await asyncio.to_thread(env.cleanup)
-
-    # Test 3c: all in one thread via run_in_executor with a dedicated thread
-    print("\n=== Step 3c: ModalEnvironment all in one thread ===", flush=True)
-    import concurrent.futures
-
-    def _test_modal_env_single_thread(img, cwd):
-        """Run ModalEnvironment create + execute in one thread."""
-        env = ModalEnvironment(image=img, cwd=cwd, timeout=600)
-        results = []
-        for cmd in ["pwd", "ls -la", "git log --oneline -5"]:
-            r = env.execute({"command": cmd})
-            results.append((cmd, r))
-        env.cleanup()
-        return results
-
-    loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        t0 = time.time()
-        results = await loop.run_in_executor(
-            pool, _test_modal_env_single_thread, image_name, "/workspace/repo"
-        )
-        print(f"Single-thread test completed in {time.time() - t0:.1f}s", flush=True)
-        for cmd, result in results:
-            output = result["output"]
-            if len(output) > 300:
-                output = output[:300] + "..."
-            print(f"\n$ {cmd}", flush=True)
-            print(f"  returncode={result['returncode']}", flush=True)
-            print(f"  output: {output}", flush=True)
+    await sandbox.cleanup()
+    print("CooperBenchSandbox cleaned up", flush=True)
 
 
 async def test_environment(task):
