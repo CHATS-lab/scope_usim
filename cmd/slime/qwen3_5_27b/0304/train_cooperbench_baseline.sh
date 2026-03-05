@@ -46,6 +46,21 @@ echo "Re-installing slime + fixing deps..."
 pip install -e "${SLIME_DIR}" 2>&1 | tail -3
 # Qwen3.5 needs latest transformers; pin openai for sglang; restore cudnn 9.16; modal for sandboxes
 pip install --upgrade transformers openai==2.6.1 nvidia-cudnn-cu12==9.16.0.29 modal 2>&1 | tail -3
+# === Patch sglang for Qwen3.5 tool calling fixes ===
+SGLANG_DIR="/sgl-workspace/sglang"
+if [ -d "${SGLANG_DIR}" ]; then
+    echo "Patching sglang for Qwen3.5..."
+    pushd "${SGLANG_DIR}"
+    git pull
+    git fetch https://github.com/sgl-project/sglang.git main
+    git cherry-pick --no-commit d38c0e537 b3202fe6d bdc1e46e5
+    pip install -e "python[all]" 2>&1 | tail -3
+    popd
+    echo "sglang patched OK"
+else
+    echo "WARNING: ${SGLANG_DIR} not found, skipping sglang patch"
+fi
+
 # Verify slime is importable
 python3 -c "from slime.train_async import parse_args, train; print('slime import OK')" || { echo "FATAL: slime import failed"; exit 1; }
 
