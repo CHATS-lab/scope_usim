@@ -155,12 +155,14 @@ COOPERBENCH_ARGS=(
    --cooperbench-tool-call-parser qwen3_coder
 )
 
-# H200: PP=1 is possible — gradient buffer ~40 GiB fits in 140 GiB.
-# If OOM on gradient alloc, switch to PP=2 (see debugging guide above).
+# H200: PP=2, no CPU optimizer offload. Keeps Adam on GPU (~47 GiB/GPU) with
+# room for 65k logits (~16 GiB). Total ~82 GiB/GPU — comfortable on 140 GiB.
+# PP=1 would push to ~129 GiB/GPU (only 11 GiB headroom — fragmentation risk).
+# No CPU offload avoids the 256 GiB RAM OOM (PP=1 offload needs ~432 GiB).
 PERF_ARGS=(
    --tensor-model-parallel-size 4
    --sequence-parallel
-   --pipeline-model-parallel-size 1
+   --pipeline-model-parallel-size 2
    --context-parallel-size 1
    --use-dynamic-batch-size
    --max-tokens-per-gpu 4096
@@ -198,8 +200,6 @@ OPTIMIZER_ARGS=(
    --weight-decay 0.1
    --adam-beta1 0.9
    --adam-beta2 0.98
-   --optimizer-cpu-offload
-   --overlap-cpu-optimizer-d2h-h2d
    --use-precision-aware-optimizer
 )
 
