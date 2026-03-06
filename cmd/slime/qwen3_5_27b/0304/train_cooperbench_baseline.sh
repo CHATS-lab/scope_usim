@@ -96,6 +96,7 @@ ROLLOUT_ARGS=(
    --n-samples-per-prompt 4
    --rollout-max-response-len 8192
    --rollout-temperature 0.7
+   --rollout-max-context-len 65536
    --global-batch-size 32
    --balance-data
 )
@@ -106,14 +107,13 @@ COOPERBENCH_ARGS=(
    --cooperbench-setting baseline
    --cooperbench-data-dir "${PROJECT_ROOT}/data/cooperbench"
    --cooperbench-backend modal
-   --cooperbench-max-steps 50
+   --cooperbench-max-steps 100
    --cooperbench-dataset-dir "${COOPERBENCH_DIR}"
-   --cooperbench-max-concurrent 16
-   --cooperbench-max-context-length 40960
+   --cooperbench-max-concurrent 32
    --cooperbench-max-tokens-per-turn 4096
    --cooperbench-max-tool-output-chars 4000
    --cooperbench-patch-bonus 0.1
-   --cooperbench-tool-call-parser qwen
+   --cooperbench-tool-call-parser qwen3_coder
 )
 
 PERF_ARGS=(
@@ -122,7 +122,7 @@ PERF_ARGS=(
    --pipeline-model-parallel-size 1
    --context-parallel-size 2
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 2048
+   --max-tokens-per-gpu 4096
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1

@@ -103,12 +103,12 @@ def _parse_json_block(block_content: str) -> Optional[Dict[str, Any]]:
 def _parse_tool_calls(
     response_text: str,
     tools_schema: List[Dict[str, Any]],
-    tool_call_parser: str = "qwen",
+    tool_call_parser: str = "qwen3_coder",
 ) -> Dict[str, Any]:
     """Parse tool calls from agent response text.
 
     Self-contained parser — no sglang dependency. Supports both XML format
-    (Qwen3.5/qwen) and JSON format (Qwen2.5/qwen25) inside <tool_call> blocks.
+    (Qwen3.5/qwen3_coder) and JSON format (Qwen2.5/qwen25) inside <tool_call> blocks.
 
     Returns {"normal_text": str, "calls": list} where each call is
     {"name": str, "arguments": dict, "id": str}.
@@ -208,7 +208,7 @@ class CodingAgentOrchestrator:
         config: UserSimConfig,
         environment: Any,
         messaging: Optional[Any] = None,
-        tool_call_parser: str = "qwen",
+        tool_call_parser: str = "qwen3_coder",
         chat_template_kwargs: Optional[Dict[str, Any]] = None,
         max_tool_output_chars: int = 4000,
     ):
