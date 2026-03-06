@@ -166,6 +166,12 @@ SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 8
    --sglang-mem-fraction-static 0.7
    --sglang-cuda-graph-bs 1 2 4 8 16
+   --sglang-speculative-algorithm NEXTN
+   --sglang-speculative-num-steps 3
+   --sglang-speculative-eagle-topk 1
+   --sglang-speculative-num-draft-tokens 4
+
+   --sglang-max-running-requests 512
 )
 
 MISC_ARGS=(
