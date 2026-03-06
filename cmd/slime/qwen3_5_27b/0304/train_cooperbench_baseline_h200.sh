@@ -1,9 +1,48 @@
 #!/bin/bash
 
-# CooperBench Baseline Training Script — Qwen3.5-27B
+# CooperBench Baseline Training Script — Qwen3.5-27B on H200 (140GB)
 # Agent (trainable): Qwen3.5-27B via SGLang
 # Setting: baseline (1 agent, 1 feature)
 # Date: 2025-03-04
+#
+# H200 vs H100 key differences (140GB vs 80GB per GPU):
+#   - rollout-max-context-len: 65536 (vs 16384) — agents can finish tasks
+#   - max-tokens-per-gpu: 4096 (vs 1024) — better training GPU utilization
+#   - pipeline-model-parallel-size: 1 (vs 2) — no pipeline bubble overhead
+#   - sglang-mem-fraction-static: 0.65 (vs 0.40) — larger KV cache, faster rollouts
+#   - speculative decoding: enabled (NEXTN) — faster token generation
+#
+# OOM Debugging Guide (if OOM occurs, apply fixes in this order):
+#
+#   1. Reduce --sglang-mem-fraction-static (0.65 -> 0.55 -> 0.45)
+#      SGLang KV cache competes with Megatron for GPU memory during training.
+#      torch_memory_saver releases KV cache but model weights (~6.5 GiB/GPU at TP=8) remain.
+#
+#   2. Reduce --max-tokens-per-gpu (4096 -> 2048 -> 1024)
+#      Controls micro-batch size during training. Logits tensor = tokens * (vocab_size/TP) * 4 bytes.
+#      With vocab_size=248320 and TP=4: 4096 tokens → ~1 GiB logits. At 65k ctx this matters.
+#
+#   3. Switch to --pipeline-model-parallel-size 2 --context-parallel-size 1
+#      PP=2 halves per-GPU params (10.9B -> 5.4B), cutting gradient buffer from ~40 GiB to ~20 GiB.
+#      Trade-off: introduces pipeline bubble overhead (~15% slower).
+#
+#   4. Reduce --rollout-max-context-len (65536 -> 32768 -> 16384)
+#      LAST RESORT. This is the most impactful setting for task completion.
+#      The training forward pass creates logits tensors proportional to sequence length:
+#        - 16k ctx: ~4 GiB peak logits    (safe on H100 80GB with PP=2)
+#        - 32k ctx: ~8 GiB peak logits    (safe on H200 140GB)
+#        - 65k ctx: ~14 GiB peak logits   (needs H200 140GB with PP=1)
+#      OOM typically manifests as "logits.clone()" or "vocab_parallel_logits - logits_max" failure.
+#
+#   5. Disable speculative decoding (remove NEXTN args)
+#      Speculative decoding allocates extra memory for draft model heads.
+#      If SGLang reports "Not enough memory", try removing speculative args first.
+#
+#   6. Nuclear option: --tensor-model-parallel-size 2 --pipeline-model-parallel-size 2 --context-parallel-size 2
+#      Only if all above fail. Significantly reduces parallelism efficiency.
+#
+# Known issue: Qwen3.5 chat template requires tool_call arguments as dict, not JSON string.
+#   Fixed in usim/core/types.py Message.to_dict() — uses json.loads() for string arguments.
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -30,7 +69,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 COOPERBENCH_DIR="${PROJECT_ROOT}/external/CooperBench"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0304_cooperbench_baseline_27b/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0304_cooperbench_baseline_27b_h200/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
@@ -94,9 +133,9 @@ ROLLOUT_ARGS=(
    --num-rollout 500
    --rollout-batch-size 8
    --n-samples-per-prompt 4
-   --rollout-max-response-len 8192
+   --rollout-max-response-len 16384
    --rollout-temperature 0.7
-   --rollout-max-context-len 16384
+   --rollout-max-context-len 65536
    --global-batch-size 32
    --balance-data
 )
@@ -116,13 +155,15 @@ COOPERBENCH_ARGS=(
    --cooperbench-tool-call-parser qwen3_coder
 )
 
+# H200: PP=1 is possible — gradient buffer ~40 GiB fits in 140 GiB.
+# If OOM on gradient alloc, switch to PP=2 (see debugging guide above).
 PERF_ARGS=(
    --tensor-model-parallel-size 4
    --sequence-parallel
-   --pipeline-model-parallel-size 2
+   --pipeline-model-parallel-size 1
    --context-parallel-size 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 1024
+   --max-tokens-per-gpu 4096
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
@@ -144,7 +185,7 @@ WANDB_ARGS=(
    --use-wandb
    --wandb-project usim
    --wandb-team simon011130
-   --wandb-group "qwen3.5-27B-cooperbench-baseline-0304"
+   --wandb-group "qwen3.5-27B-cooperbench-baseline-h200-0304"
    --wandb-key ${WANDB_API_KEY:-""}
 )
 
@@ -162,12 +203,19 @@ OPTIMIZER_ARGS=(
    --use-precision-aware-optimizer
 )
 
+# H200: larger KV cache (0.65) + speculative decoding for faster rollouts
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 8
-   --sglang-mem-fraction-static 0.40
+   --sglang-mem-fraction-static 0.65
    --sglang-cuda-graph-bs 1 2 4 8 16
 
    --sglang-max-running-requests 512
+
+   # Speculative decoding — remove these 4 lines if SGLang reports "Not enough memory"
+   --sglang-speculative-algorithm NEXTN
+   --sglang-speculative-num-steps 3
+   --sglang-speculative-eagle-topk 1
+   --sglang-speculative-num-draft-tokens 4
 )
 
 MISC_ARGS=(
