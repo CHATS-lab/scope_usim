@@ -54,7 +54,6 @@ if [ -d "${SGLANG_DIR}" ]; then
     git pull
     git fetch https://github.com/sgl-project/sglang.git main
     git cherry-pick --no-commit d38c0e537 b3202fe6d bdc1e46e5
-    pip install -e "python[all]" 2>&1 | tail -3
     popd
     echo "sglang patched OK"
 else
