@@ -54,7 +54,7 @@ ROLLOUT_ARGS=(
    --num-rollout 1000
    --rollout-batch-size 16
    --n-samples-per-prompt 8
-   --rollout-max-response-len 32768
+   --rollout-max-response-len 16384
    --rollout-temperature 0.7
    --global-batch-size 128
    --balance-data
@@ -76,7 +76,7 @@ PERF_ARGS=(
    --pipeline-model-parallel-size 1
    --context-parallel-size 2
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 8192
+   --max-tokens-per-gpu 4096
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
