@@ -107,10 +107,15 @@ WANDB_ARGS=(
    --wandb-key ${WANDB_API_KEY:-""}
 )
 
-# No eval (OpenRouter is down, only need training + checkpoints)
+# Eval config required even if we won't run eval (assertion in code)
+# Set interval to 9999 so eval never fires during 16-step training
+EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
+envsubst < "${PROJECT_ROOT}/eval_configs/p4g_6model.yaml" > "${EVAL_CONFIG_FILE}"
+
 EVAL_ARGS=(
    --eval-interval 9999
    --skip-eval-before-train
+   --eval-config "${EVAL_CONFIG_FILE}"
 )
 
 OPTIMIZER_ARGS=(
