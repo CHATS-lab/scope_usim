@@ -194,8 +194,13 @@ def fit_gamma(frequencies: list[float], num_responses: int) -> dict:
       the sub-optimality ratio ρ ≈ f_2/f_1, then γ ≈ log(f_1/f_2) / log(1/ρ_ref)
     - More robustly, we fit the entire frequency distribution.
     """
+    _default = {
+        "gamma_zipf": 1.0, "gamma_concentration": 1.0, "gamma_entropy": 1.0,
+        "gamma_mean": 1.0, "entropy": 0.0, "max_entropy": 0.0,
+        "entropy_ratio": 1.0, "top1_freq": 1.0, "num_unique": len(frequencies),
+    }
     if len(frequencies) < 2:
-        return {"gamma": 1.0, "method": "degenerate"}
+        return {**_default, "method": "degenerate"}
 
     freqs = np.array(frequencies)
 
@@ -210,7 +215,7 @@ def fit_gamma(frequencies: list[float], num_responses: int) -> dict:
     # Using numpy polyfit
     mask = freqs > 0
     if mask.sum() < 3:
-        return {"gamma": 1.0, "method": "insufficient_data"}
+        return {**_default, "method": "insufficient_data"}
 
     coeffs = np.polyfit(log_ranks[mask], log_freqs[mask], 1)
     gamma_zipf = -coeffs[0]  # Negative slope ≈ γ
