@@ -104,7 +104,8 @@ async def _p4g_generate_single(
             )
 
         conversation_id = metadata.get("conversation_id", str(sample.index))
-        persuadee_prompt_prefix = getattr(args, "p4g_persuadee_prompt_prefix", "") or ""
+        raw_prefix = getattr(args, "p4g_persuadee_prompt_prefix", []) or []
+        persuadee_prompt_prefix = " ".join(raw_prefix) if isinstance(raw_prefix, list) else (raw_prefix or "")
         env = P4gEnvironment(
             persuader_persona=persuader_persona,
             persuadee_persona=persuadee_persona,
@@ -374,9 +375,10 @@ def add_p4g_arguments(parser: Any) -> None:
 
     group.add_argument(
         "--p4g-persuadee-prompt-prefix",
-        type=str,
-        default="",
-        help="Prefix prepended to persuadee system prompt (for RL-Configured baseline)",
+        nargs="*",
+        default=[],
+        help="Prefix prepended to persuadee system prompt (for RL-Configured baseline). "
+        "Uses nargs=* to survive unquoted expansion through ray job submit's /bin/sh.",
     )
 
     group.add_argument(
