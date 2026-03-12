@@ -42,6 +42,7 @@ class P4gEnvironment:
         persuadee_api_key: Optional[str] = None,
         persuadee_max_tokens: int = 8192,
         conversation_id: str = "",
+        persuadee_prompt_prefix: str = "",
     ):
         """Initialize P4G environment.
 
@@ -66,7 +67,7 @@ class P4gEnvironment:
             persuader_persona, word_limit, num_turns
         )
         self._persuadee_system = build_persuadee_system_prompt(
-            persuadee_persona, word_limit
+            persuadee_persona, word_limit, prompt_prefix=persuadee_prompt_prefix
         )
 
         # Persuadee model config for litellm

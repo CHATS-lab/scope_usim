@@ -104,6 +104,7 @@ async def _p4g_generate_single(
             )
 
         conversation_id = metadata.get("conversation_id", str(sample.index))
+        persuadee_prompt_prefix = getattr(args, "p4g_persuadee_prompt_prefix", "") or ""
         env = P4gEnvironment(
             persuader_persona=persuader_persona,
             persuadee_persona=persuadee_persona,
@@ -113,6 +114,7 @@ async def _p4g_generate_single(
             persuadee_base_url=persuadee_base_url,
             persuadee_api_key=persuadee_api_key,
             conversation_id=conversation_id,
+            persuadee_prompt_prefix=persuadee_prompt_prefix,
         )
 
         sglang_url = (
@@ -368,6 +370,13 @@ def add_p4g_arguments(parser: Any) -> None:
         type=int,
         default=10,
         help="Total conversation turns, each side gets num_turns//2 (default: 10)",
+    )
+
+    group.add_argument(
+        "--p4g-persuadee-prompt-prefix",
+        type=str,
+        default="",
+        help="Prefix prepended to persuadee system prompt (for RL-Configured baseline)",
     )
 
     group.add_argument(
