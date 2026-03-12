@@ -71,12 +71,7 @@ P4G_ARGS=(
    --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
    --p4g-word-limit 50
    --p4g-num-turns 10
-   --p4g-persuadee-prompt-prefix "IMPORTANT behavioral guidelines for this conversation:
-- Vary your personality across conversations: sometimes be friendly and open, sometimes skeptical and resistant, sometimes confused or distracted.
-- Occasionally refuse donations firmly, even when persuaded well. Not every conversation should end in a donation.
-- Show realistic human behaviors: ask off-topic questions, express impatience, misunderstand the persuader, or change the subject.
-- Sometimes be easily convinced (agree quickly), sometimes be very stubborn (never donate).
-- Express a range of emotions: curiosity, annoyance, sympathy, indifference, suspicion."
+   --p4g-persuadee-prompt-prefix "IMPORTANT behavioral guidelines for this conversation: Vary your personality across conversations: sometimes be friendly and open, sometimes skeptical and resistant, sometimes confused or distracted. Occasionally refuse donations firmly, even when persuaded well. Not every conversation should end in a donation. Show realistic human behaviors: ask off-topic questions, express impatience, misunderstand the persuader, or change the subject. Sometimes be easily convinced (agree quickly), sometimes be very stubborn (never donate). Express a range of emotions: curiosity, annoyance, sympathy, indifference, suspicion."
 )
 
 PERF_ARGS=(
