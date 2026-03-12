@@ -121,7 +121,7 @@ EVAL_ARGS=(
 
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 5e-7
+   --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
    --adam-beta1 0.9
