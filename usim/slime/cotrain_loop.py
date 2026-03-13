@@ -238,7 +238,8 @@ def selfplay(args):
         logger.info(f"[SELFPLAY] Seeded pool with: {initial_ckpt}")
 
     # Training loop
-    rollout_data_next = None
+    # NOTE: No async pre-fetching in selfplay — each rollout must run AFTER
+    # opponent weights are reloaded from the pool checkpoint.
     for rollout_id in range(args.start_rollout_id, args.num_rollout):
         # 1. Swap opponent to a pool checkpoint for rollout diversity
         opponent_ckpt = pool.sample(pool_selection)
@@ -252,10 +253,7 @@ def selfplay(args):
             # Fall through — opponent keeps whatever weights it had
 
         # 2. Run rollout with pool-sampled opponent
-        if rollout_data_next is not None:
-            rollout_data_ref = ray.get(rollout_data_next)
-        else:
-            rollout_data_ref = ray.get(rollout_manager.generate.remote(rollout_id))
+        rollout_data_ref = ray.get(rollout_manager.generate.remote(rollout_id))
 
         # 3. Train on all samples (both agent and opponent trajectories)
         ray.get(actor_model.async_train(rollout_id, rollout_data_ref))
@@ -286,11 +284,5 @@ def selfplay(args):
         # 6. Eval
         if should_run_periodic_action(rollout_id, args.eval_interval, num_rollout_per_epoch):
             ray.get(rollout_manager.eval.remote(rollout_id))
-
-        # Start next rollout early (after weight updates)
-        if rollout_id + 1 < args.num_rollout:
-            rollout_data_next = rollout_manager.generate.remote(rollout_id + 1)
-        else:
-            rollout_data_next = None
 
     ray.get(rollout_manager.dispose.remote())
