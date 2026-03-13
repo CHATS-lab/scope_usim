@@ -249,6 +249,50 @@ For Slime integration, use the custom rollout:
 --data-source-path usim.slime.data_source.get_tau2_samples
 ```
 
+## 0313 Experiments
+
+Training scripts for the SCOPE paper experiments. All use Qwen3-4B-Instruct-2507 as the trainable model.
+
+Scripts: `cmd/slime/qwen3_4b_instruct/0313/`
+
+### Baseline — Single Closed-Source Opponent
+
+Standard RL training against a single fixed API opponent.
+
+| Script | Domain | Opponent | GPU Layout |
+|--------|--------|----------|------------|
+| `baseline/train_tau2_gpt5mini.sh` | tau2-bench (retail) | gpt-5-mini | 8 GPU colocated |
+| `baseline/train_tau2_haiku.sh` | tau2-bench (retail) | claude-haiku-4.5 | 8 GPU colocated |
+| `baseline/train_tau2_gemini.sh` | tau2-bench (retail) | gemini-3-flash | 8 GPU colocated |
+| `baseline/train_p4g_gpt5mini.sh` | Persuasion for Good | gpt-5-mini | 2 train + 6 rollout |
+| `baseline/train_p4g_haiku.sh` | Persuasion for Good | claude-haiku-4.5 | 2 train + 6 rollout |
+| `baseline/train_p4g_gemini.sh` | Persuasion for Good | gemini-3-flash | 2 train + 6 rollout |
+
+### Baseline-Distributional — Multi-Model & Verbalized Sampling
+
+Distributional diversity via model rotation or verbalized sampling ([arxiv:2510.01171](https://arxiv.org/abs/2510.01171)).
+
+| Script | Domain | Method | Opponents |
+|--------|--------|--------|-----------|
+| `baseline-distributional/train_tau2_multi.sh` | tau2-bench | Multi-model rotation | haiku + gpt5mini + gemini |
+| `baseline-distributional/train_tau2_verbalized.sh` | tau2-bench | Verbalized sampling | gpt-5-mini (TODO) |
+| `baseline-distributional/train_p4g_multi.sh` | P4G | Multi-model rotation | haiku + gpt5mini + gemini |
+| `baseline-distributional/train_p4g_verbalized.sh` | P4G | Verbalized sampling | gpt-5-mini (TODO) |
+
+### Cotrain — Multi-Agent Training
+
+Five co-training variants, each for both tau2-bench and P4G (10 scripts total).
+
+| Script | Mode | Opponent | Notes |
+|--------|------|----------|-------|
+| `cotrain/train_{tau2,p4g}_cotrain_frozen.sh` | `cotrain` | Base Qwen3-4B (frozen) | Single training group, opponent never updates |
+| `cotrain/train_{tau2,p4g}_cotrain_sft.sh` | `cotrain` | SFT'd Qwen3-4B (frozen) | Pre-SFT'd on gemini-3-flash trajectories |
+| `cotrain/train_{tau2,p4g}_dual_cotrain.sh` | `dual_cotrain` | Qwen3-4B (trainable) | Two training groups, 4+4 colocated NCCL/IPC |
+| `cotrain/train_{tau2,p4g}_dual_selfplay.sh` | `dual_selfplay` | Pool (size 10) | Opponent swapped from checkpoint pool each rollout |
+| `cotrain/train_{tau2,p4g}_dual_selfplay_pbt.sh` | `dual_selfplay` | Pool (size 20) | Population-based, save every 8 steps |
+
+**Dual-model scripts** require the Slime patch: `patches/slime_per_server_engines.patch`
+
 ## Testing
 
 ```bash
