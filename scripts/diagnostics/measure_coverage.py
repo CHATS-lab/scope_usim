@@ -16,9 +16,13 @@ Usage:
 import argparse
 import json
 import logging
+import sys
 from pathlib import Path
 
 import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.cluster import KMeans
+from sklearn.metrics.pairwise import cosine_similarity
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -38,8 +42,6 @@ def load_completions(completions_dir: Path) -> dict[str, list[str]]:
 
 def embed_completions(completions: list[str], batch_size: int = 64) -> np.ndarray:
     """Embed completions using Sentence-BERT."""
-    from sentence_transformers import SentenceTransformer
-
     model = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = model.encode(completions, batch_size=batch_size, show_progress_bar=True)
     return np.array(embeddings)
@@ -51,8 +53,6 @@ def cluster_and_measure(
     min_count: int = 5,
 ) -> dict:
     """Cluster all embeddings and compute per-model coverage."""
-    from sklearn.cluster import KMeans
-
     # Combine all embeddings for joint clustering
     all_embeddings = []
     model_indices = {}
@@ -115,8 +115,6 @@ def cluster_and_measure(
     logger.info(f"  Overlap: {results['overlap']}")
 
     # Pairwise cosine similarity (inter-model)
-    from sklearn.metrics.pairwise import cosine_similarity
-
     model_centroids = {}
     for model_name, (start, end) in model_indices.items():
         model_centroids[model_name] = all_embeddings[start:end].mean(axis=0)
@@ -152,7 +150,7 @@ def main(args):
 
     if not model_completions:
         logger.error(f"No completions found in {completions_dir}")
-        return
+        sys.exit(1)
 
     # Embed all completions
     logger.info("Embedding completions with Sentence-BERT...")

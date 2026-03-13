@@ -24,6 +24,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import litellm
 import numpy as np
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -69,6 +70,13 @@ P4G_STATES = [
 
 def load_p4g_states(data_dir: str, max_states: int = 200) -> list[dict]:
     """Load dialogue states from P4G dataset."""
+    if data_dir == "synthetic":
+        logger.info("Using synthetic P4G states")
+        return [
+            {"state_id": i, "context": P4G_STATES[i % len(P4G_STATES)], "source": "synthetic"}
+            for i in range(min(max_states, len(P4G_STATES)))
+        ]
+
     states = []
     data_path = Path(data_dir)
 
@@ -93,14 +101,10 @@ def load_p4g_states(data_dir: str, max_states: int = 200) -> list[dict]:
             break
 
     if not states:
-        # Fallback: use synthetic states
-        logger.warning(f"No P4G data found in {data_dir}, using synthetic states")
-        for i in range(min(max_states, len(P4G_STATES))):
-            states.append({
-                "state_id": i,
-                "context": P4G_STATES[i % len(P4G_STATES)],
-                "source": "synthetic",
-            })
+        raise FileNotFoundError(
+            f"No P4G data found in {data_dir}. Check path or use synthetic "
+            f"states by passing --data-dir=synthetic"
+        )
 
     logger.info(f"Loaded {len(states)} dialogue states")
     return states[:max_states]
@@ -113,7 +117,6 @@ async def sample_completions(
     semaphore: asyncio.Semaphore,
 ) -> list[str]:
     """Sample num_samples completions from a model for a given state."""
-    import litellm
 
     api_key = os.environ.get(model_config["api_key_var"], "")
     model_name = model_config["api_model"]
@@ -149,6 +152,20 @@ async def sample_completions(
             tasks.append(_call())
         results = await asyncio.gather(*tasks)
         completions.extend([r for r in results if r is not None])
+
+    num_failures = num_samples - len(completions)
+    if num_failures > 0:
+        failure_rate = num_failures / num_samples
+        logger.warning(
+            f"API failures for {model_config['name']}: "
+            f"{num_failures}/{num_samples} ({failure_rate:.0%})"
+        )
+        if failure_rate > 0.5:
+            raise RuntimeError(
+                f"Too many API failures for {model_config['name']}: "
+                f"{num_failures}/{num_samples} ({failure_rate:.0%}). "
+                f"Check API key and connectivity."
+            )
 
     return completions
 
@@ -328,7 +345,7 @@ async def measure_model(
     return all_results
 
 
-def _save_results(results: list[dict], path: Path):
+def _save_results(results, path: Path):
     """Save results to JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
