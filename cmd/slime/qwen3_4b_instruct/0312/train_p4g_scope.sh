@@ -101,7 +101,7 @@ WANDB_ARGS=(
    --use-wandb
    --wandb-project usim
    --wandb-team simon011130
-   --wandb-group qwen3-4B-Instruct-2507-p4g-scope-0312
+   --wandb-group qwen3-4B-Instruct-2507-p4g-scope-0312-v4
    --wandb-key ${WANDB_API_KEY:-""}
 )
 
