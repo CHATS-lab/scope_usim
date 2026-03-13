@@ -142,7 +142,6 @@ class _ConfiguredAgentGymEnv(AgentGymEnv):
     def _get_user(self):
         user = super()._get_user()
         if self._user_prompt_prefix and hasattr(user, "system_prompt"):
-            # Monkey-patch the system_prompt property to prepend the prefix
             original_fn = type(user).system_prompt.fget
             prefix = self._user_prompt_prefix
 
@@ -150,7 +149,13 @@ class _ConfiguredAgentGymEnv(AgentGymEnv):
             def patched_system_prompt(self_inner):
                 return prefix.strip() + "\n\n" + original_fn(self_inner)
 
-            type(user).system_prompt = patched_system_prompt
+            # Per-instance subclass to avoid mutating the shared base class
+            patched_cls = type(
+                f"_Patched{type(user).__name__}",
+                (type(user),),
+                {"system_prompt": patched_system_prompt},
+            )
+            user.__class__ = patched_cls
         return user
 
 

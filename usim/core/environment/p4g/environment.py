@@ -189,7 +189,7 @@ class P4gEnvironment:
             return content
         except Exception as e:
             logger.error(f"Persuadee API call failed ({self._persuadee_model}): {e}")
-            return "(no response)"
+            raise
 
     def _compute_reward(self) -> float:
         """Compute reward from donation signals in persuadee messages."""
