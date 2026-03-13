@@ -35,7 +35,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def add_cotrain_arguments(parser: argparse.ArgumentParser) -> None:
+def add_cotrain_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add co-training / self-play arguments to the parser."""
     # Training mode
     mode_group = parser.add_argument_group("cotrain", "Co-training / self-play arguments")
@@ -149,6 +149,8 @@ def add_cotrain_arguments(parser: argparse.ArgumentParser) -> None:
     from usim.p4g.rollout import add_p4g_arguments
 
     add_p4g_arguments(parser)
+
+    return parser
 
 
 def main() -> None:
