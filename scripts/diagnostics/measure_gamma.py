@@ -271,10 +271,12 @@ async def measure_model(
 
     semaphore = asyncio.Semaphore(max_concurrent)
     all_results = []
+    all_completions = []  # Save for coverage analysis
 
     for i, state in enumerate(states):
         t0 = time.time()
         completions = await sample_completions(model_config, state, num_samples, semaphore)
+        all_completions.extend(completions)
         elapsed = time.time() - t0
 
         freq_data = compute_response_frequencies(completions)
@@ -306,6 +308,13 @@ async def measure_model(
 
     # Save final results
     _save_results(all_results, output_dir / f"{model_name}_gamma.json")
+
+    # Save completions for coverage analysis
+    completions_dir = output_dir / "completions"
+    completions_dir.mkdir(parents=True, exist_ok=True)
+    with open(completions_dir / f"{model_name}_completions.json", "w") as f:
+        json.dump(all_completions, f)
+    logger.info(f"Saved {len(all_completions)} completions for {model_name}")
 
     # Summary
     gamma_vals = [r["gamma_mean"] for r in all_results]
