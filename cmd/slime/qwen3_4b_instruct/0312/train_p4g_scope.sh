@@ -2,7 +2,7 @@
 
 # P4G Training Script — Qwen3-4B-Instruct on Persuasion for Good
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
-# User sim (fixed): gpt-5-mini via OpenAI API (persuadee)
+# User sim (fixed): SCOPE K=3 rotation (haiku, gpt5mini, gemini) via API (persuadee)
 # Date: 2026-03-12
 # IMPORTANT: requires transformers<5.0.0
 # Pin transformers before training (launcher may upgrade past 5.0)
@@ -16,7 +16,7 @@ sleep 3
 
 set -ex
 
-export PYTHONBUFFERED=1
+export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
 
 # Detect NVLink

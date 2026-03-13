@@ -9,7 +9,7 @@ pip install 'transformers>=4.51.0,<5.0.0' 2>/dev/null || true
 
 set -ex
 
-export PYTHONBUFFERED=1
+export PYTHONUNBUFFERED=1
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"

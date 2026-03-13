@@ -19,7 +19,7 @@ sleep 3
 
 set -ex
 
-export PYTHONBUFFERED=1
+export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
 
 # Detect NVLink
