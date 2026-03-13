@@ -13,7 +13,7 @@ from argparse import Namespace
 from typing import Any, Dict, List
 
 import weave
-from slime.rollout.base_types import RolloutFnTrainOutput
+from slime.rollout.base_types import RolloutFnEvalOutput, RolloutFnTrainOutput
 from slime.rollout.sglang_rollout import get_model_url
 from slime.utils.http_utils import post
 from slime.utils.processing_utils import load_tokenizer
@@ -254,8 +254,10 @@ def cotrain_generate_rollout(
     opponent data. The cotrain_loop separates them for training.
     """
     if evaluation:
-        # For eval, only agent trajectory matters
-        return RolloutFnTrainOutput(samples=[], metrics={})
+        # Delegate to standard P4G eval (only agent trajectory matters)
+        from usim.p4g.rollout import _p4g_eval_rollout
+
+        return _p4g_eval_rollout(args, rollout_id, data_source)
 
     samples = data_source.get_samples(args.rollout_batch_size)
     agent_grouped, opponent_grouped = asyncio.run(
