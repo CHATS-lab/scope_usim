@@ -56,6 +56,7 @@ class P4gEnvironment:
             persuadee_api_key: API key for persuadee
             persuadee_max_tokens: Max tokens for persuadee generation
             conversation_id: Conversation ID for tracking
+            persuadee_prompt_prefix: Optional prefix prepended to persuadee system prompt
         """
         self._num_exchanges = num_turns // 2
         self._word_limit = word_limit

@@ -2,8 +2,9 @@
 Measure γ-sharpening on production simulators.
 
 For each of 3 simulators × N dialogue states, sample K completions at T=1.0,
-compute the empirical response frequency distribution, and fit the power-law
-model p(y) ∝ p_ref(y)^γ by maximum likelihood.
+compute the empirical response frequency distribution, and estimate the power-law
+exponent γ in p(y) ∝ p_ref(y)^γ via three heuristics (Zipf regression,
+concentration ratio, entropy ratio).
 
 This validates Section 4.1 of the paper: RLHF alignment raises the reference
 distribution to a power γ > 1, concentrating probability on modal responses.
@@ -201,15 +202,15 @@ def compute_response_frequencies(completions: list[str]) -> dict:
 
 
 def fit_gamma(frequencies: list[float], num_responses: int) -> dict:
-    """Fit the sharpening exponent γ.
+    """Estimate the sharpening exponent γ via three heuristics.
 
     Under the model p*(y) ∝ p_ref(y)^γ, with p_ref uniform over N responses,
     the resulting distribution is a power-law over the ranked responses.
 
-    We fit γ by maximum likelihood:
-    - If the mode has frequency f_max among N unique responses, and
-      the sub-optimality ratio ρ ≈ f_2/f_1, then γ ≈ log(f_1/f_2) / log(1/ρ_ref)
-    - More robustly, we fit the entire frequency distribution.
+    Methods:
+    1. Zipf regression: linear fit of log(freq) vs log(rank)
+    2. Concentration ratio: estimate from top-1 frequency vs uniform baseline
+    3. Entropy ratio: γ ≈ 1 / (H(p*) / H(uniform))
     """
     _default = {
         "gamma_zipf": 1.0, "gamma_concentration": 1.0, "gamma_entropy": 1.0,
