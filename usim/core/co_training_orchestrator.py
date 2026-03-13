@@ -213,13 +213,15 @@ class CoTrainingOrchestrator:
                 break
 
         # Build both trajectories
+        # Agent is rewarded for persuasion success; opponent is rewarded for resistance
+        opponent_reward = 1.0 - total_reward
         agent_traj = self._build_trajectory(
             agent_tokens, agent_masks, agent_logprobs,
             agent_messages, num_turns, task_info, status, total_reward, env_info,
         )
         opponent_traj = self._build_trajectory(
             opponent_tokens, opponent_masks, opponent_logprobs,
-            env.persuadee_messages, num_turns, task_info, status, total_reward, env_info,
+            env.persuadee_messages, num_turns, task_info, status, opponent_reward, env_info,
         )
 
         return agent_traj, opponent_traj
