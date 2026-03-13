@@ -199,7 +199,7 @@ async def _run_cotrain_batch_async(
         temperature=args.rollout_temperature,
         top_p=getattr(args, "rollout_top_p", 0.95),
         top_k=getattr(args, "rollout_top_k", -1),
-        max_new_tokens=8192,
+        max_new_tokens=getattr(args, "rollout_max_new_tokens", 1024),
     )
 
     tasks = []

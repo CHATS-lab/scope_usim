@@ -79,6 +79,7 @@ PERF_ARGS=(
    --context-parallel-size 2
    --use-dynamic-batch-size
    --max-tokens-per-gpu 2048
+   --log-probs-chunk-size 2048
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
