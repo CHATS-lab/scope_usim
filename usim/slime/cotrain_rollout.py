@@ -276,8 +276,9 @@ def cotrain_generate_rollout(
     if docent_uploader:
         docent_uploader.upload_batch(all_agent_samples, rollout_id)
 
-    # Store both sets of samples in the output.
-    # The cotrain_loop reads metrics["opponent_samples"] to get opponent data.
-    metrics["_opponent_samples"] = opponent_grouped
+    # Combine agent and opponent samples into one training batch.
+    # Each set keeps its own prompt groups (GRPO computes advantages per group).
+    # Agent groups come first, then opponent groups.
+    all_samples = agent_grouped + opponent_grouped
 
-    return RolloutFnTrainOutput(samples=agent_grouped, metrics=metrics)
+    return RolloutFnTrainOutput(samples=all_samples, metrics=metrics)
