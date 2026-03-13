@@ -1,13 +1,18 @@
 """Persuasion for Good environment implementing BaseEnvironment protocol.
 
 Pure text conversation (no tools). The environment manages the persuadee
-(fixed opponent via OpenAI API) and computes donation-based reward.
+(fixed opponent via OpenAI API or pluggable generate_fn) and computes
+donation-based reward.
 
 Flow per step:
 1. Agent (persuader) sends a message
 2. Environment calls persuadee LLM (role-flipped conversation)
 3. Extracts donation signals from persuadee response
 4. Returns (persuadee_response, reward, terminated, truncated, info)
+
+For co-training / self-play modes, an `opponent_generate_fn` replaces the
+litellm API call. The orchestrator reads `last_opponent_output` to get
+the opponent's token_ids and logprobs for dual-trajectory tracking.
 """
 
 import logging
@@ -27,7 +32,8 @@ class P4gEnvironment:
     """Persuasion for Good environment.
 
     Implements BaseEnvironment protocol for the orchestrator.
-    Manages the persuadee (fixed opponent) via OpenAI-compatible API.
+    Manages the persuadee (fixed opponent) via OpenAI-compatible API
+    or a pluggable opponent_generate_fn for co-training/self-play.
     No tools — pure text conversation.
     """
 
@@ -43,6 +49,7 @@ class P4gEnvironment:
         persuadee_max_tokens: int = 8192,
         conversation_id: str = "",
         persuadee_prompt_prefix: str = "",
+        opponent_generate_fn: Optional[Callable] = None,
     ):
         """Initialize P4G environment.
 
@@ -57,6 +64,10 @@ class P4gEnvironment:
             persuadee_max_tokens: Max tokens for persuadee generation
             conversation_id: Conversation ID for tracking
             persuadee_prompt_prefix: Optional prefix prepended to persuadee system prompt
+            opponent_generate_fn: Optional callable for co-training/self-play.
+                Signature: async (input_ids: List[int], sampling_params: Dict) -> Dict
+                Returns {"text", "token_ids", "logprobs", "meta_info"}.
+                When set, replaces litellm API calls for the persuadee.
         """
         self._num_exchanges = num_turns // 2
         self._word_limit = word_limit
@@ -71,7 +82,10 @@ class P4gEnvironment:
             persuadee_persona, word_limit, prompt_prefix=persuadee_prompt_prefix
         )
 
-        # Persuadee model config for litellm
+        # Pluggable opponent generation (for co-training/self-play)
+        self._opponent_generate_fn = opponent_generate_fn
+
+        # Persuadee model config for litellm (used when opponent_generate_fn is None)
         # OpenRouter models need openrouter/ prefix; OpenAI models work as-is
         self._persuadee_model = persuadee_model
         if persuadee_base_url and "openrouter" in persuadee_base_url:
@@ -86,6 +100,10 @@ class P4gEnvironment:
         self._all_messages: List[Dict[str, Any]] = []
         self._exchange_count = 0
 
+        # Last opponent output for co-training trajectory tracking.
+        # Set after each _call_persuadee() when using opponent_generate_fn.
+        self.last_opponent_output: Optional[Dict[str, Any]] = None
+
     async def reset(
         self,
     ) -> Tuple[List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Dict[str, Any]]:
@@ -99,6 +117,7 @@ class P4gEnvironment:
             {"role": "system", "content": self._persuadee_system}
         ]
         self._all_messages = []
+        self.last_opponent_output = None
 
         initial_messages = [{"role": "system", "content": self._persuader_system}]
         task_info = {
@@ -113,7 +132,8 @@ class P4gEnvironment:
     ) -> Tuple[str, float, bool, bool, Dict[str, Any]]:
         """Step environment with persuader's message.
 
-        Calls persuadee API and returns response with donation reward.
+        Calls persuadee (API or opponent_generate_fn) and returns response
+        with donation reward.
 
         Args:
             action: Persuader's text message
@@ -127,7 +147,7 @@ class P4gEnvironment:
         # Add to persuadee's conversation (role-flipped: persuader = "user")
         self._persuadee_messages.append({"role": "user", "content": action})
 
-        # Call persuadee API
+        # Call persuadee (API or pluggable generate_fn)
         persuadee_text = await self._call_persuadee()
 
         # Track persuadee's response
@@ -160,8 +180,46 @@ class P4gEnvironment:
         """No prompt postprocessing needed for P4G."""
         return None
 
+    @property
+    def persuadee_system_prompt(self) -> str:
+        """Return the persuadee system prompt (for opponent tokenization)."""
+        return self._persuadee_system
+
+    @property
+    def persuadee_messages(self) -> List[Dict[str, Any]]:
+        """Return the persuadee's conversation history (for opponent tokenization)."""
+        return self._persuadee_messages
+
     async def _call_persuadee(self) -> str:
-        """Call persuadee LLM via litellm."""
+        """Call persuadee LLM via litellm or opponent_generate_fn."""
+        if self._opponent_generate_fn is not None:
+            return await self._call_persuadee_via_generate_fn()
+        return await self._call_persuadee_via_api()
+
+    async def _call_persuadee_via_generate_fn(self) -> str:
+        """Call persuadee via pluggable generate function (co-training/self-play).
+
+        The opponent_generate_fn receives input_ids and sampling_params,
+        same interface as the agent's generate_fn. The caller (co-training
+        orchestrator) is responsible for tokenizing the persuadee's messages
+        and passing them as input_ids.
+
+        We store the full output in self.last_opponent_output so the
+        co-training orchestrator can extract token_ids and logprobs.
+        """
+        # The co-training orchestrator handles tokenization externally
+        # and wraps it into the generate_fn. We just need to call it
+        # with the persuadee messages and get back text + tokens.
+        assert self._opponent_generate_fn is not None
+        output = await self._opponent_generate_fn(
+            self._persuadee_messages,
+            {"temperature": 0.7, "max_new_tokens": self._persuadee_max_tokens},
+        )
+        self.last_opponent_output = output
+        return output["text"]
+
+    async def _call_persuadee_via_api(self) -> str:
+        """Call persuadee LLM via litellm (original API path)."""
         try:
             kwargs = {
                 "model": self._persuadee_model,
@@ -187,6 +245,7 @@ class P4gEnvironment:
                     f"usage={response.usage}"
                 )
 
+            self.last_opponent_output = None
             return content
         except Exception as e:
             logger.error(f"Persuadee API call failed ({self._persuadee_model}): {e}")
