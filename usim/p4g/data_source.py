@@ -124,7 +124,7 @@ class P4GDataSource(DataSource):
 
     def __len__(self) -> int:
         """Return total number of P4G tasks."""
-        return len(self._load_tasks()) or 1
+        return len(self._load_tasks())
 
     def get_samples(self, num_samples: int) -> List[List[Sample]]:
         """Return sample groups for rollout.
