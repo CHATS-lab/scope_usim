@@ -1,27 +1,30 @@
 """Training entry point for multi-agent co-training and self-play with Slime.
 
-Supports three training modes:
-  single   - 1 trainable model + fixed API opponent (delegates to train_p4g_slime.py)
-  cotrain  - 2 trainable models (e.g., persuader + persuadee), each with SGLang engines
-  selfplay - 2 trainable models + opponent checkpoint pool for rollout diversity
+Supports five training modes:
+  single        - 1 trainable model + fixed API opponent (delegates to Slime)
+  cotrain       - 1 training group, dual-trajectory rollout (both sides trained)
+  selfplay      - 1 training group + opponent checkpoint pool
+  dual_cotrain  - 2 training groups, colocated NCCL/IPC weight sync
+  dual_selfplay - 2 training groups + opponent checkpoint pool
 
-Switching between modes requires only --training-mode plus an sglang-config YAML
-that defines "actor" and "opponent" named models.
+Single-model modes (cotrain/selfplay) use one training group for both roles.
+Dual-model modes use two independent training groups with FilteredRolloutProxy
+for per-model NCCL/IPC weight sync (requires slime_per_server_engines.patch).
 
 Usage:
-  # Mode 2: Co-training
+  # Single training group co-training
   python train_cotrain_slime.py --training-mode cotrain \
-    --sglang-config configs/sglang/cotrain_4plus4.yaml \
-    --rollout-function-path usim.slime.cotrain_rollout.cotrain_generate_rollout \
-    --data-source-path usim.p4g.data_source.get_p4g_data_source \
-    ...
+    --sglang-config configs/sglang/cotrain_2plus2.yaml ...
 
-  # Mode 3: Self-play with checkpoint pool
-  python train_cotrain_slime.py --training-mode selfplay \
+  # True dual-model co-training (colocated, 4+4 GPUs)
+  python train_cotrain_slime.py --training-mode dual_cotrain \
     --sglang-config configs/sglang/cotrain_4plus4.yaml \
-    --pool-dir /checkpoints/selfplay_pool \
-    --pool-size 10 --pool-save-interval 16 \
-    ...
+    --actor-num-gpus-per-node 4 ...
+
+  # Dual-model self-play with checkpoint pool
+  python train_cotrain_slime.py --training-mode dual_selfplay \
+    --sglang-config configs/sglang/cotrain_4plus4.yaml \
+    --pool-dir /checkpoints/selfplay_pool ...
 """
 
 import argparse
@@ -44,8 +47,14 @@ def add_cotrain_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentP
         "--training-mode",
         type=str,
         default="cotrain",
-        choices=["single", "cotrain", "selfplay"],
-        help="Training mode: single (1 model + API), cotrain (2 models), selfplay (2 models + pool)",
+        choices=["single", "cotrain", "selfplay", "dual_cotrain", "dual_selfplay"],
+        help=(
+            "Training mode: single (1 model + API), "
+            "cotrain (1 training group, dual trajectories), "
+            "selfplay (1 training group + pool), "
+            "dual_cotrain (2 training groups, colocated NCCL), "
+            "dual_selfplay (2 training groups + pool)"
+        ),
     )
 
     mode_group.add_argument(
@@ -199,10 +208,15 @@ def main() -> None:
     logger.info(f"Rollout function: {args.rollout_function_path}")
     logger.info(f"Data source: {args.data_source_path}")
 
-    if training_mode == "selfplay":
+    if training_mode in ("dual_cotrain", "dual_selfplay"):
+        opp_hf = getattr(args, "opponent_hf_checkpoint", None) or args.hf_checkpoint
+        logger.info(f"Opponent model: {opp_hf}")
+        logger.info(f"Opponent GPUs/node: {getattr(args, 'opponent_num_gpus_per_node', args.actor_num_gpus_per_node)}")
+
+    if training_mode in ("selfplay", "dual_selfplay"):
         pool_dir = getattr(args, "pool_dir", None)
         if not pool_dir:
-            logger.error("Self-play mode requires --pool-dir")
+            logger.error(f"{training_mode} mode requires --pool-dir")
             sys.exit(1)
         logger.info(f"Pool dir: {pool_dir}")
         logger.info(f"Pool size: {getattr(args, 'pool_size', 10)}")
@@ -211,15 +225,25 @@ def main() -> None:
 
     logger.info("=" * 60)
 
-    from usim.slime.cotrain_loop import cotrain, selfplay
+    from usim.slime.cotrain_loop import (
+        cotrain,
+        dual_cotrain,
+        dual_selfplay,
+        selfplay,
+    )
 
-    if training_mode == "cotrain":
-        cotrain(args)
-    elif training_mode == "selfplay":
-        selfplay(args)
-    else:
+    dispatch = {
+        "cotrain": cotrain,
+        "selfplay": selfplay,
+        "dual_cotrain": dual_cotrain,
+        "dual_selfplay": dual_selfplay,
+    }
+
+    fn = dispatch.get(training_mode)
+    if fn is None:
         logger.error(f"Unknown training mode: {training_mode}")
         sys.exit(1)
+    fn(args)
 
 
 if __name__ == "__main__":

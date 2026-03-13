@@ -249,6 +249,59 @@ For Slime integration, use the custom rollout:
 --data-source-path usim.slime.data_source.get_tau2_samples
 ```
 
+## 0313 Experiments
+
+Training scripts for the SCOPE paper experiments. All use Qwen3-4B-Instruct-2507 as the trainable model.
+
+Scripts: `cmd/slime/qwen3_4b_instruct/0313/{category}/{domain}/`
+
+### Baseline — Single Closed-Source Opponent
+
+Standard RL training against a single fixed API opponent.
+
+**`baseline/tau2/`** — tau2-bench (retail), 8 GPU colocated
+
+| Script | Opponent |
+|--------|----------|
+| `train_gpt5mini.sh` | gpt-5-mini |
+| `train_haiku.sh` | claude-haiku-4.5 |
+| `train_gemini.sh` | gemini-3-flash |
+
+**`baseline/p4g/`** — Persuasion for Good, 2 train + 6 rollout
+
+| Script | Opponent |
+|--------|----------|
+| `train_gpt5mini.sh` | gpt-5-mini |
+| `train_haiku.sh` | claude-haiku-4.5 |
+| `train_gemini.sh` | gemini-3-flash |
+
+### Baseline-Distributional — Multi-Model & Verbalized Sampling
+
+Distributional diversity via model rotation or verbalized sampling ([arxiv:2510.01171](https://arxiv.org/abs/2510.01171)).
+
+**`baseline-distributional/tau2/`** | **`baseline-distributional/p4g/`**
+
+| Script | Method | Opponents |
+|--------|--------|-----------|
+| `train_multi.sh` | Multi-model rotation | haiku + gpt5mini + gemini |
+| `train_verbalized.sh` | Verbalized sampling | gpt-5-mini (TODO) |
+
+### Cotrain — Multi-Agent Training
+
+Five co-training variants, each for both tau2 and P4G.
+
+**`cotrain/tau2/`** | **`cotrain/p4g/`**
+
+| Script | Mode | Opponent | Notes |
+|--------|------|----------|-------|
+| `train_cotrain_frozen.sh` | `cotrain` | Base Qwen3-4B (frozen) | Single training group, opponent never updates |
+| `train_cotrain_sft.sh` | `cotrain` | SFT'd Qwen3-4B (frozen) | Pre-SFT'd on gemini-3-flash trajectories |
+| `train_dual_cotrain.sh` | `dual_cotrain` | Qwen3-4B (trainable) | Two training groups, 4+4 colocated NCCL/IPC |
+| `train_dual_selfplay.sh` | `dual_selfplay` | Pool (size 10) | Opponent swapped from checkpoint pool each rollout |
+| `train_dual_selfplay_pbt.sh` | `dual_selfplay` | Pool (size 20) | Population-based, save every 8 steps |
+
+**Dual-model scripts** require the Slime patch: `patches/slime_per_server_engines.patch`
+
 ## Testing
 
 ```bash
