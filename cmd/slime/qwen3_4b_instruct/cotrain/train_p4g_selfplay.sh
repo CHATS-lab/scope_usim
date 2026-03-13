@@ -41,6 +41,7 @@ source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 
 CKPT_ARGS=(
    --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
+   --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
    --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_selfplay_p4g/"
    --save-interval 32
 )

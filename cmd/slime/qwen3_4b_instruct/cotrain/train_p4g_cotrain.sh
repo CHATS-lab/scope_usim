@@ -40,6 +40,7 @@ source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 
 CKPT_ARGS=(
    --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
+   --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
    --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_cotrain_p4g/"
    --save-interval 32
 )
@@ -154,6 +155,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    -- python3 -m train_cotrain_slime \
    --actor-num-nodes 1 \
    --actor-num-gpus-per-node 2 \
+   --save-hf "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_cotrain_p4g_hf/" \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
