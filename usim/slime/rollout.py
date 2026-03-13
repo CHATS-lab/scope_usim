@@ -88,6 +88,7 @@ async def _usim_generate_single(
         user_model, user_base_url, user_api_key = _get_user_model_config(args, sample)
         max_turns = getattr(args, "max_turns", 30)
 
+        user_prompt_prefix = getattr(args, "usim_user_prompt_prefix", "") or ""
         env = Tau2Environment(
             domain=domain,
             task_id=task.id,
@@ -95,6 +96,7 @@ async def _usim_generate_single(
             user_base_url=user_base_url,
             user_api_key=user_api_key,
             max_turns=max_turns,
+            user_prompt_prefix=user_prompt_prefix,
         )
 
         sglang_url = (

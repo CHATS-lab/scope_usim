@@ -63,17 +63,21 @@ https://www.savethechildren.org/
 </rules>""")
 
 
-def build_persuadee_system_prompt(persona_text: str, word_limit: int = 50) -> str:
+def build_persuadee_system_prompt(
+    persona_text: str, word_limit: int = 50, prompt_prefix: str = ""
+) -> str:
     """Build system prompt for the persuadee (user simulator).
 
     Args:
         persona_text: Persona text block (with <persona> tags)
         word_limit: Max words per response
+        prompt_prefix: Optional prefix prepended to the system prompt (for RL-Configured baseline)
 
     Returns:
         Full system prompt string
     """
-    return dedent(f"""\
+    prefix = f"{prompt_prefix.strip()}\n\n" if prompt_prefix else ""
+    return prefix + dedent(f"""\
 You are an Amazon Mechanical Turk worker completing a $2 communication task.
 - You are motivated by this task payment — you value every cent you earn.
 - Act naturally as the person in the <persona> tag—think and respond as they would, including their quirks, beliefs, biases, and reasoning.

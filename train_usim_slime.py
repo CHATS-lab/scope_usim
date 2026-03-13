@@ -93,6 +93,13 @@ def add_usim_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
     group.add_argument(
+        "--usim-user-prompt-prefix",
+        type=str,
+        default="",
+        help="Prefix prepended to user simulator system prompt (for RL-Configured baseline)",
+    )
+
+    group.add_argument(
         "--trajectory-output-dir",
         type=str,
         default=None,

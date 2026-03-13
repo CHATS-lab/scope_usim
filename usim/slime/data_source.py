@@ -113,6 +113,10 @@ class Tau2DataSource(DataSource):
 
         return samples
 
+    def __len__(self) -> int:
+        """Return total number of tau2-bench tasks."""
+        return len(self._load_tasks())
+
     def add_samples(self, samples: List[List[Sample]]):
         """No-op: USIM generates conversations on-the-fly."""
         pass

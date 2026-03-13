@@ -132,6 +132,33 @@ def _parse_tool_calls(
         return None
 
 
+class _ConfiguredAgentGymEnv(AgentGymEnv):
+    """AgentGymEnv subclass that injects a behavioral prefix into the user simulator prompt."""
+
+    def __init__(self, *args, user_prompt_prefix: str = "", **kwargs):
+        self._user_prompt_prefix = user_prompt_prefix
+        super().__init__(*args, **kwargs)
+
+    def _get_user(self):
+        user = super()._get_user()
+        if self._user_prompt_prefix and hasattr(user, "system_prompt"):
+            original_fn = type(user).system_prompt.fget
+            prefix = self._user_prompt_prefix
+
+            @property
+            def patched_system_prompt(self_inner):
+                return prefix.strip() + "\n\n" + original_fn(self_inner)
+
+            # Per-instance subclass to avoid mutating the shared base class
+            patched_cls = type(
+                f"_Patched{type(user).__name__}",
+                (type(user),),
+                {"system_prompt": patched_system_prompt},
+            )
+            user.__class__ = patched_cls
+        return user
+
+
 class Tau2Environment:
     """Tau2-bench environment wrapping AgentGymEnv.
 
@@ -148,6 +175,7 @@ class Tau2Environment:
         user_base_url: str = "https://api.openai.com/v1",
         user_api_key: Optional[str] = None,
         max_turns: int = 30,
+        user_prompt_prefix: str = "",
     ):
         self._domain = domain
         self._task_id = task_id
@@ -160,7 +188,8 @@ class Tau2Environment:
             if not user_model.startswith("openrouter/"):
                 litellm_model = f"openrouter/{user_model}"
 
-        self._env = AgentGymEnv(
+        env_cls = _ConfiguredAgentGymEnv if user_prompt_prefix else AgentGymEnv
+        env_kwargs = dict(
             domain=domain,
             task_id=task_id,
             max_steps=max_turns,
@@ -170,6 +199,10 @@ class Tau2Environment:
                 "api_key": user_api_key,
             },
         )
+        if user_prompt_prefix:
+            env_kwargs["user_prompt_prefix"] = user_prompt_prefix
+
+        self._env = env_cls(**env_kwargs)
         self._tools_schema: Optional[List[Dict[str, Any]]] = None
 
     async def reset(
