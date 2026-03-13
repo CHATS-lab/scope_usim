@@ -37,6 +37,18 @@ class TrainableRole(Enum):
     BOTH = "both"
 
 
+class TrainingMode(str, Enum):
+    """Multi-agent training mode.
+
+    - SINGLE: 1 trainable model + fixed API opponent (existing behavior)
+    - COTRAIN: 2 trainable models, each with SGLang engines + training workers
+    - SELFPLAY: 2 trainable models + opponent checkpoint pool for diversity
+    """
+    SINGLE = "single"
+    COTRAIN = "cotrain"
+    SELFPLAY = "selfplay"
+
+
 @dataclass
 class ToolCall:
     """Represents a tool/function call made by agent or user.
