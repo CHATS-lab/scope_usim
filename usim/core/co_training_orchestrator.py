@@ -148,8 +148,10 @@ class CoTrainingOrchestrator:
             agent_masks.extend([1] * len(response_tokens))  # agent trained
             agent_logprobs.extend(response_logprobs)
 
-            # 4. Build action and step environment
-            # Opponent token tracking happens AFTER env.step() updates persuadee_messages
+            # 4. Snapshot opponent messages before env.step() mutates them
+            opp_messages_before_step = list(env.persuadee_messages)
+
+            # 5. Build action and step environment
             action = parsed["normal_text"]
             try:
                 obs, reward, terminated, truncated, step_info = await env.step(action)
@@ -159,32 +161,31 @@ class CoTrainingOrchestrator:
                 status = TrajectoryStatus.FAILED
                 break
 
-            # 6. After env.step(), the environment has:
-            #    - Added persuader's message as "user" in persuadee_messages
-            #    - Called opponent_generate_fn → set last_opponent_output
-            #    - Added opponent's response as "assistant" in persuadee_messages
+            # 6. After env.step(), persuadee_messages has two new entries:
+            #    [... existing ..., {"role": "user", ...}, {"role": "assistant", ...}]
+            #    We compute token deltas for each separately.
 
-            # Track agent's message as "user" in opponent's token stream
-            # The persuadee_messages now has the user message + assistant response
-            # We need to get the delta for the user message first
-            opp_messages_after_user = env.persuadee_messages[:-1]  # without last assistant
+            # 6a. Agent's message as "user" in opponent's token stream (loss_mask=0)
+            opp_messages_with_user = opp_messages_before_step + [
+                {"role": "user", "content": action}
+            ]
             opp_user_delta = self._get_token_delta_simple(
-                self.opponent_tokenizer, opp_messages_after_user, None, lambda x: x
+                self.opponent_tokenizer, opp_messages_with_user, None, lambda x: x
             )
             opponent_tokens.extend(opp_user_delta)
-            opponent_masks.extend([0] * len(opp_user_delta))  # not trained
+            opponent_masks.extend([0] * len(opp_user_delta))
             opponent_logprobs.extend([0.0] * len(opp_user_delta))
 
-            # Track opponent's response tokens from last_opponent_output
+            # 6b. Opponent's response tokens from last_opponent_output (loss_mask=1)
             opponent_output = env.last_opponent_output
             if opponent_output is not None:
                 opp_response_tokens = opponent_output["token_ids"]
                 opp_response_logprobs = opponent_output["logprobs"]
                 opponent_tokens.extend(opp_response_tokens)
-                opponent_masks.extend([1] * len(opp_response_tokens))  # opponent trained
+                opponent_masks.extend([1] * len(opp_response_tokens))
                 opponent_logprobs.extend(opp_response_logprobs)
             else:
-                # API-based opponent (shouldn't happen in co-training, but handle gracefully)
+                # API-based opponent — no token-level tracking, use re-tokenization
                 opp_resp_delta = self._get_token_delta_simple(
                     self.opponent_tokenizer, env.persuadee_messages, None, lambda x: x
                 )
