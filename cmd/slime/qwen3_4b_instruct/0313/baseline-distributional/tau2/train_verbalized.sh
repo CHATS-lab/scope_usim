@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# Population-Based Self-Play Training Script — Qwen3-4B-Instruct on tau2-bench (retail)
-# Population-based dual self-play — large checkpoint pool for opponent diversity
+# USIM Training Script — Qwen3-4B-Instruct on tau2-bench (retail)
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
-# Opponent (pool): Large population of historical checkpoints (20), saved every 8 rollouts
-# Date: 2026-03-13 (0313 dual selfplay pbt)
+# User sim (fixed): gpt-5-mini via OpenAI API with verbalized sampling
+# Date: 2026-03-13
+#
+# TODO: --usim-verbalized-sampling not yet implemented — needs persona rotation in rollout
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -14,9 +15,8 @@ sleep 3
 
 set -ex
 
-export PYTHONUNBUFFERED=1
+export PYTHONBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Detect NVLink
 NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
@@ -28,10 +28,10 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_tau2_dual_selfplay_pbt/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_tau2_verbalized/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
@@ -42,14 +42,14 @@ source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 CKPT_ARGS=(
    --hf-checkpoint "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507"
    --ref-load "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_dual_selfplay_pbt_tau2/"
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_usim_tau2/"
    --save-interval 32
 )
 
 ROLLOUT_ARGS=(
    --data-source-path usim.slime.data_source.get_tau2_data_source
-   --rollout-function-path usim.slime.cotrain_rollout.cotrain_generate_rollout
-   --num-rollout 500
+   --rollout-function-path usim.slime.rollout.usim_generate_rollout
+   --num-rollout 1000
    --rollout-batch-size 16
    --n-samples-per-prompt 8
    --rollout-max-response-len 32768
@@ -58,31 +58,24 @@ ROLLOUT_ARGS=(
    --balance-data
 )
 
-# Cotrain-specific arguments (dual selfplay with large checkpoint pool)
-COTRAIN_ARGS=(
-   --training-mode dual_selfplay
+# USIM-specific arguments
+# Agent (trainable) = Qwen3-4B-Instruct via SGLang
+# User sim (fixed opponent) = gpt-5-mini via OpenAI API
+USIM_ARGS=(
    --trainable-role agent
    --max-turns 30
-   --pool-dir "${OUTPUT_DIR}/checkpoint_pool"
-   --pool-size 20
-   --pool-save-interval 8
-   --pool-selection random
-)
-
-# tau2-bench arguments
-TAU2_ARGS=(
    --usim-domain retail
+   --usim-fixed-opponent-model "gpt-5-mini"
+   # --usim-verbalized-sampling  # Verbalized sampling (arxiv:2510.01171)
 )
 
-# Colocated 4+4 perf config
 PERF_ARGS=(
-   --tensor-model-parallel-size 4
+   --tensor-model-parallel-size 1
    --sequence-parallel
    --pipeline-model-parallel-size 1
-   --context-parallel-size 1
+   --context-parallel-size 2
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 2048
-   --log-probs-chunk-size 2048
+   --max-tokens-per-gpu 8192
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
@@ -104,7 +97,7 @@ WANDB_ARGS=(
    --use-wandb
    --wandb-project usim
    --wandb-team simon011130
-   --wandb-group qwen3-4B-Instruct-2507-tau2-dual-selfplay-pbt-0313
+   --wandb-group qwen3-4B-Instruct-2507-tau2-verbalized-0313
    --wandb-key ${WANDB_API_KEY:-""}
 )
 
@@ -128,7 +121,7 @@ OPTIMIZER_ARGS=(
 )
 
 SGLANG_ARGS=(
-   --sglang-config "${PROJECT_ROOT}/configs/sglang/cotrain_4plus4.yaml"
+   --rollout-num-gpus-per-engine 1
    --sglang-mem-fraction-static 0.7
 )
 
@@ -153,18 +146,14 @@ RUNTIME_ENV_JSON="{
 
 ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
-   -- python3 -m train_cotrain_slime \
+   -- python3 -m train_usim_slime \
    --actor-num-nodes 1 \
-   --actor-num-gpus-per-node 4 \
+   --actor-num-gpus-per-node 8 \
    --colocate \
-   --offload-rollout \
-   --offload-train \
-   --save-hf "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_dual_selfplay_pbt_tau2_hf/" \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
-   ${COTRAIN_ARGS[@]} \
-   ${TAU2_ARGS[@]} \
+   ${USIM_ARGS[@]} \
    ${EVAL_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \
    ${GRPO_ARGS[@]} \

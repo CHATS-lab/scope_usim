@@ -2,10 +2,8 @@
 
 # USIM Training Script — Qwen3-4B-Instruct on tau2-bench (retail)
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
-# User sim (fixed): gpt-5-mini via OpenAI API with verbalized sampling
-# Date: 2026-03-13
-#
-# TODO: --usim-verbalized-sampling not yet implemented — needs persona rotation in rollout
+# User sim (fixed): gpt-5-mini via OpenAI API
+# Date: 2026-03-13 (0313 baseline)
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -28,10 +26,10 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_tau2_verbalized/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_tau2_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
@@ -66,7 +64,6 @@ USIM_ARGS=(
    --max-turns 30
    --usim-domain retail
    --usim-fixed-opponent-model "gpt-5-mini"
-   # --usim-verbalized-sampling  # Verbalized sampling (arxiv:2510.01171)
 )
 
 PERF_ARGS=(
@@ -97,7 +94,7 @@ WANDB_ARGS=(
    --use-wandb
    --wandb-project usim
    --wandb-team simon011130
-   --wandb-group qwen3-4B-Instruct-2507-tau2-verbalized-0313
+   --wandb-group qwen3-4B-Instruct-2507-tau2-gpt5mini-0313
    --wandb-key ${WANDB_API_KEY:-""}
 )
 

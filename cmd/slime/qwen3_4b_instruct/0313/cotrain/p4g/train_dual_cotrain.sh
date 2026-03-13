@@ -1,11 +1,10 @@
 #!/bin/bash
 
-# P4G Training Script — Qwen3-4B-Instruct on Persuasion for Good
+# Dual Cotrain Training Script — Qwen3-4B-Instruct on Persuasion for Good
+# True dual-model co-training — both models train independently with NCCL/IPC
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
-# User sim (fixed): gpt-5-mini via OpenAI API with verbalized sampling (persuadee)
-# Date: 2026-03-13
-#
-# TODO: --usim-verbalized-sampling not yet implemented — needs persona rotation in rollout
+# Opponent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuadee, opposite reward)
+# Date: 2026-03-13 (0313 dual cotrain)
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -15,8 +14,9 @@ sleep 3
 
 set -ex
 
-export PYTHONBUFFERED=1
+export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Detect NVLink
 NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
@@ -28,10 +28,10 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_p4g_verbalized/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_p4g_dual_cotrain/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
@@ -42,14 +42,14 @@ source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 CKPT_ARGS=(
    --hf-checkpoint "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507"
    --ref-load "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_usim_p4g/"
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_dual_cotrain_p4g/"
    --save-interval 32
 )
 
 ROLLOUT_ARGS=(
    --data-source-path usim.p4g.data_source.get_p4g_data_source
-   --rollout-function-path usim.p4g.rollout.p4g_generate_rollout
-   --num-rollout 1000
+   --rollout-function-path usim.slime.cotrain_rollout.cotrain_generate_rollout
+   --num-rollout 500
    --rollout-batch-size 16
    --n-samples-per-prompt 8
    --rollout-max-response-len 32768
@@ -58,27 +58,30 @@ ROLLOUT_ARGS=(
    --balance-data
 )
 
-# P4G-specific arguments
-# Agent (trainable) = Qwen3-4B-Instruct via SGLang (persuader)
-# User sim (fixed opponent) = gpt-5-mini via OpenAI API (persuadee)
-P4G_ARGS=(
+# Cotrain-specific arguments
+COTRAIN_ARGS=(
+   --training-mode dual_cotrain
    --trainable-role agent
    --max-turns 10
-   --usim-fixed-opponent-model "gpt-5-mini"
-   # --usim-verbalized-sampling  # Verbalized sampling (arxiv:2510.01171)
+)
+
+# P4G-specific arguments
+P4G_ARGS=(
    --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus"
    --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
    --p4g-word-limit 50
    --p4g-num-turns 10
 )
 
+# Colocated 4+4 perf config
 PERF_ARGS=(
-   --tensor-model-parallel-size 1
+   --tensor-model-parallel-size 4
    --sequence-parallel
    --pipeline-model-parallel-size 1
-   --context-parallel-size 2
+   --context-parallel-size 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 8192
+   --max-tokens-per-gpu 2048
+   --log-probs-chunk-size 2048
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
@@ -100,7 +103,7 @@ WANDB_ARGS=(
    --use-wandb
    --wandb-project usim
    --wandb-team simon011130
-   --wandb-group qwen3-4B-Instruct-2507-p4g-verbalized-0313
+   --wandb-group qwen3-4B-Instruct-2507-p4g-dual-cotrain-0313
    --wandb-key ${WANDB_API_KEY:-""}
 )
 
@@ -124,7 +127,7 @@ OPTIMIZER_ARGS=(
 )
 
 SGLANG_ARGS=(
-   --rollout-num-gpus-per-engine 1
+   --sglang-config "${PROJECT_ROOT}/configs/sglang/cotrain_4plus4.yaml"
    --sglang-mem-fraction-static 0.7
 )
 
@@ -149,13 +152,16 @@ RUNTIME_ENV_JSON="{
 
 ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
-   -- python3 -m train_p4g_slime \
+   -- python3 -m train_cotrain_slime \
    --actor-num-nodes 1 \
-   --actor-num-gpus-per-node 2 \
-   --rollout-num-gpus 6 \
+   --actor-num-gpus-per-node 4 \
+   --colocate \
+   --offload-rollout \
+   --offload-train \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
+   ${COTRAIN_ARGS[@]} \
    ${P4G_ARGS[@]} \
    ${EVAL_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \

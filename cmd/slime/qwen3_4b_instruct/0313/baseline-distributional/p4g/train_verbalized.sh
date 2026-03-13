@@ -2,8 +2,10 @@
 
 # P4G Training Script — Qwen3-4B-Instruct on Persuasion for Good
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
-# User sim (fixed): gpt-5-mini via OpenAI API (persuadee)
-# Date: 2026-03-13 (0313 baseline)
+# User sim (fixed): gpt-5-mini via OpenAI API with verbalized sampling (persuadee)
+# Date: 2026-03-13
+#
+# TODO: --usim-verbalized-sampling not yet implemented — needs persona rotation in rollout
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -26,10 +28,10 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_p4g_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_p4g_verbalized/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
@@ -57,10 +59,13 @@ ROLLOUT_ARGS=(
 )
 
 # P4G-specific arguments
+# Agent (trainable) = Qwen3-4B-Instruct via SGLang (persuader)
+# User sim (fixed opponent) = gpt-5-mini via OpenAI API (persuadee)
 P4G_ARGS=(
    --trainable-role agent
    --max-turns 10
    --usim-fixed-opponent-model "gpt-5-mini"
+   # --usim-verbalized-sampling  # Verbalized sampling (arxiv:2510.01171)
    --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus"
    --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
    --p4g-word-limit 50
@@ -95,7 +100,7 @@ WANDB_ARGS=(
    --use-wandb
    --wandb-project usim
    --wandb-team simon011130
-   --wandb-group qwen3-4B-Instruct-2507-p4g-gpt5mini-0313
+   --wandb-group qwen3-4B-Instruct-2507-p4g-verbalized-0313
    --wandb-key ${WANDB_API_KEY:-""}
 )
 
