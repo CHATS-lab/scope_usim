@@ -187,20 +187,13 @@ def main() -> None:
         args.data_source_path or "usim.p4g.data_source.get_p4g_data_source"
     )
 
-    # Default opponent GPU config
-    if args.opponent_num_gpus is None:
-        args.opponent_num_gpus = args.actor_num_gpus_per_node * args.actor_num_nodes
-    if args.opponent_num_gpus_per_node is None:
-        args.opponent_num_gpus_per_node = args.opponent_num_gpus
-
     # Log configuration
     logger.info("=" * 60)
     logger.info(f"Multi-Agent Training Configuration (mode={training_mode})")
     logger.info("=" * 60)
-    logger.info(f"Actor: {args.hf_checkpoint}")
-    logger.info(f"Opponent: {getattr(args, 'opponent_hf_checkpoint', None) or args.hf_checkpoint}")
-    logger.info(f"Actor GPUs: {args.actor_num_gpus_per_node * args.actor_num_nodes}")
-    logger.info(f"Opponent GPUs: {args.opponent_num_gpus}")
+    logger.info(f"Model: {args.hf_checkpoint}")
+    logger.info(f"Training GPUs: {args.actor_num_gpus_per_node * args.actor_num_nodes}")
+    logger.info(f"Rollout GPUs: {args.rollout_num_gpus}")
     logger.info(f"Rollout function: {args.rollout_function_path}")
     logger.info(f"Data source: {args.data_source_path}")
 

@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# P4G Co-Training Script — Qwen3-4B-Instruct (Mode 2: dual training)
-# Actor (trainable): Qwen3-4B-Instruct-2507 (persuader) on 4 GPUs
-# Opponent (trainable): Qwen3-4B-Instruct-2507 (persuadee) on 4 GPUs
-# Both models trained every step with GRPO.
-# Requires sglang-config with "actor" and "opponent" named models.
+# P4G Co-Training Script — Qwen3-4B-Instruct (Mode 2: dual-trajectory training)
+# Single training group trains on both agent + opponent trajectory samples.
+# Actor SGLang engine: NCCL weight sync. Opponent SGLang engine: periodic disk reload.
+# GPU layout: [training:2][actor_engines:3][opponent_engines:3] = 8 GPUs
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -62,9 +61,6 @@ COTRAIN_ARGS=(
    --training-mode cotrain
    --trainable-role agent
    --max-turns 10
-   --opponent-num-gpus 4
-   --opponent-num-nodes 1
-   --opponent-num-gpus-per-node 4
 )
 
 # P4G-specific arguments
@@ -128,9 +124,9 @@ OPTIMIZER_ARGS=(
 
 # sglang-config with actor + opponent named models
 SGLANG_ARGS=(
-   --sglang-config "${PROJECT_ROOT}/configs/sglang/cotrain_4plus4.yaml"
-   --rollout-num-gpus 8
-   --rollout-num-gpus-per-engine 4
+   --sglang-config "${PROJECT_ROOT}/configs/sglang/cotrain_2plus2.yaml"
+   --rollout-num-gpus 6
+   --rollout-num-gpus-per-engine 1
    --sglang-mem-fraction-static 0.7
 )
 
@@ -157,7 +153,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
    -- python3 -m train_cotrain_slime \
    --actor-num-nodes 1 \
-   --actor-num-gpus-per-node 4 \
+   --actor-num-gpus-per-node 2 \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
