@@ -120,6 +120,9 @@ def cotrain(args):
     with_ref = args.kl_coef != 0 or getattr(args, "use_kl_loss", False)
     ray.get(actor_model.async_init(args, role="actor", with_ref=with_ref))
 
+    # Connect training group to rollout manager (required for NCCL weight sync)
+    actor_model.set_rollout_manager(rollout_manager)
+
     # Sync weights to actor SGLang engines via NCCL
     actor_model.update_weights()
     # Opponent engines start with the HF checkpoint weights (loaded at engine start)
@@ -217,6 +220,7 @@ def selfplay(args):
 
     with_ref = args.kl_coef != 0 or getattr(args, "use_kl_loss", False)
     ray.get(actor_model.async_init(args, role="actor", with_ref=with_ref))
+    actor_model.set_rollout_manager(rollout_manager)
     actor_model.update_weights()
 
     # Initialize checkpoint pool
