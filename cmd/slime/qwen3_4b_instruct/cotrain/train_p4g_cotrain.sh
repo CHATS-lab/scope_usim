@@ -15,6 +15,7 @@ set -ex
 
 export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Detect NVLink
 NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
