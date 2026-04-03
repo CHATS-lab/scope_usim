@@ -43,6 +43,7 @@ class CoTrainingOrchestrator:
         agent_tokenizer: Any,
         opponent_tokenizer: Any,
         config: UserSimConfig,
+        cooperative: bool = False,
     ):
         """Initialize the co-training orchestrator.
 
@@ -50,10 +51,13 @@ class CoTrainingOrchestrator:
             agent_tokenizer: HuggingFace tokenizer for the agent (persuader)
             opponent_tokenizer: HuggingFace tokenizer for the opponent (persuadee)
             config: Training configuration (max_turns, temperature, etc.)
+            cooperative: If True, opponent gets the same reward as agent.
+                If False (default), opponent_reward = 1.0 - agent_reward (adversarial).
         """
         self.agent_tokenizer = agent_tokenizer
         self.opponent_tokenizer = opponent_tokenizer
         self.config = config
+        self.cooperative = cooperative
 
     async def rollout(
         self,
@@ -213,8 +217,11 @@ class CoTrainingOrchestrator:
                 break
 
         # Build both trajectories
-        # Agent is rewarded for persuasion success; opponent is rewarded for resistance
-        opponent_reward = 1.0 - total_reward
+        if self.cooperative:
+            opponent_reward = total_reward
+        else:
+            # Adversarial: agent wants high reward, opponent resists
+            opponent_reward = 1.0 - total_reward
         agent_traj = self._build_trajectory(
             agent_tokens, agent_masks, agent_logprobs,
             agent_messages, num_turns, task_info, status, total_reward, env_info,

@@ -421,9 +421,19 @@ def dual_cotrain(args):
     )
 
     # Initialize both training groups
-    with_ref = args.kl_coef != 0 or getattr(args, "use_kl_loss", False)
-    ray.get(actor_model.async_init(args, role="actor", with_ref=with_ref))
-    ray.get(opponent_model.async_init(opponent_args, role="actor", with_ref=with_ref))
+    # Per-role KL: if --no-agent-kl, agent trains without KL; opponent keeps KL
+    no_agent_kl = getattr(args, "no_agent_kl", False)
+    actor_with_ref = (args.kl_coef != 0 or getattr(args, "use_kl_loss", False)) and not no_agent_kl
+    opponent_with_ref = args.kl_coef != 0 or getattr(args, "use_kl_loss", False)
+
+    if no_agent_kl:
+        # Disable KL on actor args so the loss function doesn't compute it
+        args.use_kl_loss = False
+        args.kl_coef = 0
+        logger.info("[DUAL_COTRAIN] Agent KL disabled (--no-agent-kl)")
+
+    ray.get(actor_model.async_init(args, role="actor", with_ref=actor_with_ref))
+    ray.get(opponent_model.async_init(opponent_args, role="actor", with_ref=opponent_with_ref))
 
     # TWO proxies for per-model NCCL/IPC weight updates
     from usim.slime.filtered_rollout_proxy import FilteredRolloutProxy
@@ -560,9 +570,18 @@ def dual_selfplay(args):
         pg=opponent_pg,
     )
 
-    with_ref = args.kl_coef != 0 or getattr(args, "use_kl_loss", False)
-    ray.get(actor_model.async_init(args, role="actor", with_ref=with_ref))
-    ray.get(opponent_model.async_init(opponent_args, role="actor", with_ref=with_ref))
+    # Per-role KL: if --no-agent-kl, agent trains without KL; opponent keeps KL
+    no_agent_kl = getattr(args, "no_agent_kl", False)
+    actor_with_ref = (args.kl_coef != 0 or getattr(args, "use_kl_loss", False)) and not no_agent_kl
+    opponent_with_ref = args.kl_coef != 0 or getattr(args, "use_kl_loss", False)
+
+    if no_agent_kl:
+        args.use_kl_loss = False
+        args.kl_coef = 0
+        logger.info("[DUAL_SELFPLAY] Agent KL disabled (--no-agent-kl)")
+
+    ray.get(actor_model.async_init(args, role="actor", with_ref=actor_with_ref))
+    ray.get(opponent_model.async_init(opponent_args, role="actor", with_ref=opponent_with_ref))
 
     from usim.slime.filtered_rollout_proxy import FilteredRolloutProxy
 

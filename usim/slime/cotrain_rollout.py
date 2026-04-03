@@ -157,10 +157,12 @@ async def _cotrain_generate_single(
             temperature=sampling_params.get("temperature", 0.7),
         )
 
+        cooperative = getattr(args, "cooperative_reward", False)
         orchestrator = CoTrainingOrchestrator(
             agent_tokenizer=agent_tokenizer,
             opponent_tokenizer=opponent_tokenizer,
             config=config,
+            cooperative=cooperative,
         )
         agent_traj, opponent_traj = await orchestrator.rollout(
             env, agent_generate_fn, sampling_params
