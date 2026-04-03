@@ -16,7 +16,6 @@ set -ex
 
 export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Load secrets
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
