@@ -19,7 +19,7 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Load secrets
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../../../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../../" && pwd)"
 if [ -f "${PROJECT_ROOT}/.env" ]; then
     set -a; source "${PROJECT_ROOT}/.env"; set +a
 fi
