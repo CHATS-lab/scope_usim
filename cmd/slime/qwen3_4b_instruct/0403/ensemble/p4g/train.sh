@@ -60,8 +60,8 @@ P4G_ARGS=(
    --trainable-role agent
    --max-turns 10
    --usim-fixed-opponent-model "anthropic/claude-haiku-4.5,gpt-5-mini,google/gemini-3-flash-preview"
-   --usim-fixed-opponent-base-url "https://openrouter.ai/api/v1,https://openrouter.ai/api/v1,https://openrouter.ai/api/v1"
-   --usim-fixed-opponent-api-key-var "OPENROUTER_API_KEY,OPENROUTER_API_KEY,OPENROUTER_API_KEY"
+   --usim-fixed-opponent-base-url "https://openrouter.ai/api/v1,https://api.openai.com/v1,https://openrouter.ai/api/v1"
+   --usim-fixed-opponent-api-key-var "OPENROUTER_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY"
    --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus"
    --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
    --p4g-word-limit 50
