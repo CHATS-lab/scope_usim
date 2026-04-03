@@ -34,6 +34,19 @@ from slime.utils.misc import should_run_periodic_action
 from usim.core.checkpoint_pool import CheckpointPool
 
 
+def _get_model_url(args, model_name: str, endpoint: str) -> str:
+    sglang_config = getattr(args, 'sglang_config_data', None)
+    if sglang_config and 'models' in sglang_config:
+        for model in sglang_config['models']:
+            if model.get('name') == model_name:
+                host = getattr(args, 'sglang_router_ip', '127.0.0.1')
+                port = model.get('router_port', getattr(args, 'sglang_router_port', 4702))
+                return f'http://{host}:{port}{endpoint}'
+    host = getattr(args, 'sglang_router_ip', '127.0.0.1')
+    port = getattr(args, 'sglang_router_port', 4702)
+    return f'http://{host}:{port}{endpoint}' 
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,10 +61,9 @@ def _reload_opponent_weights(args, checkpoint_path: str):
 
     import aiohttp
 
-    from slime.rollout.sglang_rollout import get_model_url
 
     async def _do_reload():
-        url = get_model_url(args, "opponent", "/update_weights_from_disk")
+        url = _get_model_url(args, "opponent", "/update_weights_from_disk")
         logger.info(f"Reloading opponent weights from {checkpoint_path} via {url}")
         async with aiohttp.ClientSession() as session:
             resp = await session.post(
@@ -329,10 +341,9 @@ def _reload_model_weights(args, model_name: str, checkpoint_path: str):
 
     import aiohttp
 
-    from slime.rollout.sglang_rollout import get_model_url
 
     async def _do_reload():
-        url = get_model_url(args, model_name, "/update_weights_from_disk")
+        url = _get_model_url(args, model_name, "/update_weights_from_disk")
         logger.info(f"Reloading {model_name} weights from {checkpoint_path} via {url}")
         async with aiohttp.ClientSession() as session:
             resp = await session.post(

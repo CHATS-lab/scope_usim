@@ -19,7 +19,6 @@ from typing import Any, Dict, List
 
 import weave
 from slime.rollout.base_types import RolloutFnTrainOutput
-from slime.rollout.sglang_rollout import get_model_url
 from slime.utils.http_utils import post
 from slime.utils.processing_utils import load_tokenizer
 from slime.utils.types import Sample
@@ -37,6 +36,28 @@ from tau2.gym import AgentGymEnv
 
 
 logger = logging.getLogger(__name__)
+
+
+def __get_model_url(args, model_name: str, endpoint: str) -> str:
+    """Get URL for a named model's SGLang endpoint.
+
+    For cotrain, sglang-config defines multiple models (actor, opponent).
+    Each has its own router port. This reads model configs from args.
+    Falls back to the default router URL for single-model setups.
+    """
+    # Try sglang-config based multi-model setup
+    sglang_config = getattr(args, "sglang_config_data", None)
+    if sglang_config and "models" in sglang_config:
+        for model in sglang_config["models"]:
+            if model.get("name") == model_name:
+                host = getattr(args, "sglang_router_ip", "127.0.0.1")
+                port = model.get("router_port", getattr(args, "sglang_router_port", 4702))
+                return f"http://{host}:{port}{endpoint}"
+
+    # Fallback: use default router
+    host = getattr(args, "sglang_router_ip", "127.0.0.1")
+    port = getattr(args, "sglang_router_port", 4702)
+    return f"http://{host}:{port}{endpoint}"
 
 
 class _SGLangAgentGymEnv(AgentGymEnv):
@@ -199,8 +220,8 @@ async def _tau2_cotrain_generate_single(
         max_turns = getattr(args, "max_turns", 30)
 
         # Build generate functions
-        agent_url = get_model_url(args, "actor", "/generate")
-        opponent_url = get_model_url(args, "opponent", "/generate")
+        agent_url = _get_model_url(args, "actor", "/generate")
+        opponent_url = _get_model_url(args, "opponent", "/generate")
 
         agent_hf = getattr(args, "hf_checkpoint", None)
         opponent_hf = getattr(args, "opponent_hf_checkpoint", None) or agent_hf
