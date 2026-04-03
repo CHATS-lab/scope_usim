@@ -98,11 +98,11 @@ class UserSimOrchestrator:
         env_info: Dict[str, Any] = {}
 
         for turn in range(self.config.max_turns):
-            # Token limit check before generation
-            if len(all_tokens) + self.config.max_tokens > self.config.max_context_length:
+            # Token limit check: only truncate when total length actually exceeds limit
+            if len(all_tokens) > self.config.max_context_length:
                 logger.warning(
-                    f"Token limit at turn {turn}: {len(all_tokens)} + "
-                    f"{self.config.max_tokens} > {self.config.max_context_length}"
+                    f"Token limit at turn {turn}: {len(all_tokens)} > "
+                    f"{self.config.max_context_length}"
                 )
                 status = TrajectoryStatus.TRUNCATED
                 break
