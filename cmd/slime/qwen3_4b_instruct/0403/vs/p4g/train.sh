@@ -31,14 +31,15 @@ echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0403_p4g_vs_gemini/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
+MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
 
 source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507"
-   --ref-load "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
+   --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
+   --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
    --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_vs_p4g/"
    --save-interval 16
 )
