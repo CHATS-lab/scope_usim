@@ -85,6 +85,31 @@ def add_cotrain_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentP
         help="GPUs per node for opponent training group",
     )
 
+    mode_group.add_argument(
+        "--cooperative-reward",
+        action="store_true",
+        default=False,
+        help="Opponent gets same reward as agent (for collaborative tasks like tau2). "
+        "Default is adversarial (opponent_reward = 1 - agent_reward).",
+    )
+
+    mode_group.add_argument(
+        "--no-agent-kl",
+        action="store_true",
+        default=False,
+        help="Disable KL loss for agent training group in dual modes. "
+        "Opponent still uses KL to stay close to reference model.",
+    )
+
+    # tau2-bench arguments for cotrain
+    mode_group.add_argument(
+        "--usim-domain",
+        type=str,
+        default="retail",
+        choices=["retail", "airline", "telecom"],
+        help="tau2-bench domain (default: retail)",
+    )
+
     # Self-play checkpoint pool
     mode_group.add_argument(
         "--pool-dir",

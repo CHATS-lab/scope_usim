@@ -62,6 +62,6 @@ class TrajectoryRecorder:
                 if extra_metadata:
                     row.update(extra_metadata)
 
-                f.write(json.dumps(row) + "\n")
+                f.write(json.dumps(row, default=str) + "\n")
 
         logger.info(f"Recorded {len(samples)} trajectories to {path}")

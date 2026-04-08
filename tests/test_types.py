@@ -11,6 +11,8 @@ from usim.core.types import (
     UserState,
     AgentState,
     compute_token_delta,
+    get_token_delta,
+    probe_inter_message_glue,
 )
 
 
@@ -241,6 +243,121 @@ class TestComputeTokenDelta:
         assert len(tokens) > 0
         assert len(tokens) == len(mask)
         assert all(m == 0 for m in mask)
+
+    def test_user_delta_includes_generation_prompt(self):
+        """Regression test for Fix 1: user-message delta MUST include the
+        assistant generation prompt. Otherwise the next generate_fn call is
+        fed a prompt with no assistant cue and the model goes OOD.
+        """
+        tokenizer = self.SimpleTokenizer()
+        messages = [
+            {"role": "user", "content": "obs1"},
+            {"role": "assistant", "content": "resp1"},
+            {"role": "user", "content": "obs2"},
+        ]
+        tokens, mask = get_token_delta(tokenizer, messages)
+        decoded = "".join(chr(t) for t in tokens)
+        assert "<assistant>" in decoded, (
+            f"user-message delta must include the generation prompt; got: {decoded!r}"
+        )
+        assert all(m == 0 for m in mask), "user-message delta must not be trainable"
+
+    def test_assistant_delta_excludes_extra_generation_prompt(self):
+        """Assistant-message delta must NOT include a duplicate generation
+        prompt (the previous state already has it)."""
+        tokenizer = self.SimpleTokenizer()
+        messages = [
+            {"role": "user", "content": "obs1"},
+            {"role": "assistant", "content": "resp1"},
+        ]
+        tokens, mask = get_token_delta(tokenizer, messages)
+        decoded = "".join(chr(t) for t in tokens)
+        # The prev state ended with <assistant>, so curr's delta should
+        # contain resp1's content and its </assistant> closing tag, not a
+        # second <assistant> opening tag.
+        assert "resp1" in decoded
+        assert decoded.count("<assistant>") == 0, (
+            f"assistant delta should not re-introduce generation prompt; got: {decoded!r}"
+        )
+        assert all(m == 1 for m in mask), "assistant delta must be trainable"
+
+
+class TestMultiTurnRoundTrip:
+    """Round-trip tests that exercise incremental delta building.
+
+    These tests use a real HF tokenizer to catch template-specific bugs that
+    the SimpleTokenizer would miss. Skipped if transformers isn't installed.
+    """
+
+    @pytest.fixture
+    def tokenizer(self):
+        transformers = pytest.importorskip("transformers")
+        try:
+            return transformers.AutoTokenizer.from_pretrained(
+                "Qwen/Qwen2.5-0.5B-Instruct", trust_remote_code=True
+            )
+        except Exception as e:
+            pytest.skip(f"Could not load test tokenizer: {e}")
+
+    def test_multi_turn_round_trip(self, tokenizer):
+        """Incrementally-built buffer must exactly equal batch re-tokenization.
+
+        This is the strongest possible check for the token delta helper: if
+        you build all_tokens by appending the initial prompt + per-turn deltas,
+        the result should be identical to re-tokenizing the full conversation
+        at the end with add_generation_prompt=False.
+        """
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "What's the capital of France?"},
+        ]
+
+        # Turn 0: initial prompt with generation prompt
+        initial = tokenizer.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=True
+        )
+        all_tokens = list(initial)
+
+        # Simulate assistant response
+        assistant_content = "The capital of France is Paris."
+        messages.append({"role": "assistant", "content": assistant_content})
+
+        # In a real rollout, response tokens come from the inference server.
+        # We simulate that by computing the assistant delta.
+        asst_delta, asst_mask = get_token_delta(tokenizer, messages)
+        all_tokens.extend(asst_delta)
+
+        # Turn 1: append a new user obs
+        messages.append({"role": "user", "content": "And Germany?"})
+        user_delta, user_mask = get_token_delta(tokenizer, messages)
+        all_tokens.extend(user_delta)
+
+        # The user-message delta MUST include the next assistant generation
+        # prompt so that subsequent generation is in-distribution.
+        decoded_delta = tokenizer.decode(user_delta)
+        assert "assistant" in decoded_delta.lower(), (
+            f"user-message delta must include generation prompt; got: {decoded_delta!r}"
+        )
+
+        # Final reference: re-tokenize the full conversation
+        reference = tokenizer.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=True
+        )
+
+        assert all_tokens == list(reference), (
+            "Incrementally built buffer must equal batch re-tokenization. "
+            f"len(incremental)={len(all_tokens)}, len(reference)={len(reference)}"
+        )
+
+    def test_probe_inter_message_glue(self, tokenizer):
+        """Fix 2: probe must return the template's post-EOS glue.
+
+        For Qwen tokenizers this is typically [198] (a single newline).
+        """
+        glue = probe_inter_message_glue(tokenizer)
+        # Glue should be either empty or a short sequence (usually just \n)
+        assert isinstance(glue, list)
+        assert len(glue) <= 4, f"Glue unexpectedly long: {glue}"
 
 
 class TestUserState:

@@ -5,6 +5,7 @@ index de84e10d..patch0001 100644
 @@ -479,6 +479,30 @@ class RolloutManager:
              srv.num_new_engines = 0
 
+
 +    def get_server_engines_and_lock(self, server_name: str):
 +        """Return engines for a specific named server.
 +

@@ -27,6 +27,8 @@ from usim.core.types import (
     Trajectory,
     TrajectoryStatus,
     UserSimConfig,
+    get_token_delta,
+    probe_inter_message_glue,
 )
 
 
@@ -57,6 +59,12 @@ class UserSimOrchestrator:
         """
         self.tokenizer = tokenizer
         self.config = config
+        # Probe the chat template's post-EOS glue ONCE (typically [198] / \n
+        # for Qwen, Llama 3, Mistral, Gemma). SGLang returns response tokens
+        # ending at EOS but does NOT include this trailing glue, so we append
+        # it ourselves after each completed assistant turn.
+        self._inter_message_glue: List[int] = probe_inter_message_glue(tokenizer)
+        self._eos_token_id: Optional[int] = getattr(tokenizer, "eos_token_id", None)
 
     async def rollout(
         self,
@@ -98,11 +106,11 @@ class UserSimOrchestrator:
         env_info: Dict[str, Any] = {}
 
         for turn in range(self.config.max_turns):
-            # Token limit check before generation
-            if len(all_tokens) + self.config.max_tokens > self.config.max_context_length:
+            # Token limit check: only truncate when total length actually exceeds limit
+            if len(all_tokens) > self.config.max_context_length:
                 logger.warning(
-                    f"Token limit at turn {turn}: {len(all_tokens)} + "
-                    f"{self.config.max_tokens} > {self.config.max_context_length}"
+                    f"Token limit at turn {turn}: {len(all_tokens)} > "
+                    f"{self.config.max_context_length}"
                 )
                 status = TrajectoryStatus.TRUNCATED
                 break
@@ -110,6 +118,14 @@ class UserSimOrchestrator:
             # 1. Generate via LLM (TITO: pass accumulated input_ids)
             try:
                 output = await generate_fn(all_tokens, sampling_params)
+
+                # Fix 4: inference-server error detection. If the adapter
+                # returned a sentinel error dict, bail out before appending
+                # an empty response to the training buffer.
+                if output.get("error"):
+                    logger.warning(f"Inference error at turn {turn}: {output['error']}")
+                    status = TrajectoryStatus.FAILED
+                    break
 
                 meta = output.get("meta_info", {})
                 finish_reason = meta.get("finish_reason", {})
@@ -140,6 +156,30 @@ class UserSimOrchestrator:
             all_masks.extend([1] * len(response_tokens))
             all_logprobs.extend(response_logprobs)
 
+            # Fix 3: max_tokens truncation guard. If generation hit max_tokens
+            # without emitting EOS, the response is incomplete. Do NOT append
+            # inter-message glue (the template would otherwise inject a fake
+            # <|im_end|> that gets mislabeled as non-trainable on the next
+            # turn) and do NOT continue to another turn.
+            hit_eos = (
+                bool(response_tokens)
+                and self._eos_token_id is not None
+                and response_tokens[-1] == self._eos_token_id
+            )
+            if not hit_eos:
+                status = TrajectoryStatus.TRUNCATED
+                num_turns = turn + 1
+                break
+
+            # Fix 2: append inter-message glue after a completed assistant
+            # response. SGLang stops at EOS and does not include the
+            # template's trailing \n, so we pad it manually. loss_mask=0
+            # because this is template structure, not model output.
+            if self._inter_message_glue:
+                all_tokens.extend(self._inter_message_glue)
+                all_masks.extend([0] * len(self._inter_message_glue))
+                all_logprobs.extend([0.0] * len(self._inter_message_glue))
+
             # 4. Build action for environment
             calls = parsed["calls"]
             if calls:
@@ -164,7 +204,11 @@ class UserSimOrchestrator:
                 status = TrajectoryStatus.FAILED
                 break
 
-            # 6. Track environment response tokens (loss_mask=0, logprobs=0.0)
+            # 6. Track environment response tokens (loss_mask=0, logprobs=0.0).
+            # Fix 1: the canonical get_token_delta helper ensures the delta
+            # for a user/tool message includes the <|im_start|>assistant\n
+            # generation prompt, so the next generate_fn(all_tokens) call is
+            # in-distribution.
             if tool_called:
                 messages.append({
                     "role": "tool",
@@ -174,7 +218,9 @@ class UserSimOrchestrator:
             else:
                 messages.append({"role": "user", "content": obs})
 
-            delta, mask = self._get_token_delta(messages, tools_schema, postprocess)
+            delta, mask = get_token_delta(
+                self.tokenizer, messages, tools_schema=tools_schema, postprocess=postprocess,
+            )
             all_tokens.extend(delta)
             all_masks.extend(mask)
             all_logprobs.extend([0.0] * len(delta))
@@ -216,31 +262,21 @@ class UserSimOrchestrator:
     ) -> Tuple[List[int], List[int]]:
         """Calculate token delta for the last message added.
 
+        Thin wrapper around the canonical ``get_token_delta`` helper in
+        ``usim.core.types``. Kept as a method so existing tests that call
+        ``orchestrator._get_token_delta(...)`` continue to work.
+
         Used for user/tool/environment tokens (NOT assistant tokens, which
         come directly from model output for TITO accuracy).
 
-        Returns (token_ids, loss_mask) where loss_mask=0 for env tokens.
+        Returns (token_ids, loss_mask).
         """
-        template_kwargs: Dict[str, Any] = {}
-        if tools_schema:
-            template_kwargs["tools"] = tools_schema
-
-        curr = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False, **template_kwargs,
+        return get_token_delta(
+            self.tokenizer,
+            messages,
+            tools_schema=tools_schema,
+            postprocess=postprocess,
         )
-        curr = postprocess(curr)
-
-        prev_messages = messages[:-1]
-        prev = self.tokenizer.apply_chat_template(
-            prev_messages, tokenize=False, add_generation_prompt=False, **template_kwargs,
-        )
-        prev = postprocess(prev)
-
-        delta_text = curr[len(prev):]
-        new_tokens = self.tokenizer.encode(delta_text, add_special_tokens=False)
-        loss_mask = [0] * len(new_tokens)
-
-        return new_tokens, loss_mask
 
     def _build_trajectory(
         self,

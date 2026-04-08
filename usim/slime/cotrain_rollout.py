@@ -14,7 +14,6 @@ from typing import Any, Dict, List
 
 import weave
 from slime.rollout.base_types import RolloutFnEvalOutput, RolloutFnTrainOutput
-from slime.rollout.sglang_rollout import get_model_url
 from slime.utils.http_utils import post
 from slime.utils.processing_utils import load_tokenizer
 from slime.utils.types import Sample
@@ -30,6 +29,19 @@ from usim.utils.docent import get_docent_uploader
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_model_url(args, model_name: str, endpoint: str) -> str:
+    sglang_config = getattr(args, 'sglang_config_data', None)
+    if sglang_config and 'models' in sglang_config:
+        for model in sglang_config['models']:
+            if model.get('name') == model_name:
+                host = getattr(args, 'sglang_router_ip', '127.0.0.1')
+                port = model.get('router_port', getattr(args, 'sglang_router_port', 4702))
+                return f'http://{host}:{port}{endpoint}'
+    host = getattr(args, 'sglang_router_ip', '127.0.0.1')
+    port = getattr(args, 'sglang_router_port', 4702)
+    return f'http://{host}:{port}{endpoint}' 
 
 _persona_loader_cache: Dict[str, PersonaLoader] = {}
 
@@ -123,8 +135,8 @@ async def _cotrain_generate_single(
         conversation_id = metadata.get("conversation_id", str(sample.index))
 
         # Build generate functions for both models via sglang-config
-        agent_url = get_model_url(args, "actor", "/generate")
-        opponent_url = get_model_url(args, "opponent", "/generate")
+        agent_url = _get_model_url(args, "actor", "/generate")
+        opponent_url = _get_model_url(args, "opponent", "/generate")
 
         agent_generate_fn = _make_sglang_generate_fn(agent_url)
 
@@ -157,10 +169,12 @@ async def _cotrain_generate_single(
             temperature=sampling_params.get("temperature", 0.7),
         )
 
+        cooperative = getattr(args, "cooperative_reward", False)
         orchestrator = CoTrainingOrchestrator(
             agent_tokenizer=agent_tokenizer,
             opponent_tokenizer=opponent_tokenizer,
             config=config,
+            cooperative=cooperative,
         )
         agent_traj, opponent_traj = await orchestrator.rollout(
             env, agent_generate_fn, sampling_params

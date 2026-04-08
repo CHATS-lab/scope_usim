@@ -71,7 +71,7 @@ def add_p4g_train_arguments(parser: argparse.ArgumentParser) -> None:
 def main() -> None:
     """Main entry point for P4G training with Slime."""
     try:
-        from slime.train_async import parse_args, train
+        from slime.train import parse_args, train
     except ImportError:
         logger.error("slime package not found. Install with: pip install slime")
         sys.exit(1)

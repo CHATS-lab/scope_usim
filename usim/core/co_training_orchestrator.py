@@ -23,6 +23,8 @@ from usim.core.types import (
     Trajectory,
     TrajectoryStatus,
     UserSimConfig,
+    get_token_delta,
+    probe_inter_message_glue,
 )
 
 
@@ -43,6 +45,7 @@ class CoTrainingOrchestrator:
         agent_tokenizer: Any,
         opponent_tokenizer: Any,
         config: UserSimConfig,
+        cooperative: bool = False,
     ):
         """Initialize the co-training orchestrator.
 
@@ -50,10 +53,19 @@ class CoTrainingOrchestrator:
             agent_tokenizer: HuggingFace tokenizer for the agent (persuader)
             opponent_tokenizer: HuggingFace tokenizer for the opponent (persuadee)
             config: Training configuration (max_turns, temperature, etc.)
+            cooperative: If True, opponent gets the same reward as agent.
+                If False (default), opponent_reward = 1.0 - agent_reward (adversarial).
         """
         self.agent_tokenizer = agent_tokenizer
         self.opponent_tokenizer = opponent_tokenizer
         self.config = config
+        self.cooperative = cooperative
+        # Probe inter-message glue per tokenizer (Fix 2). See
+        # ``probe_inter_message_glue`` in ``usim.core.types`` for details.
+        self._agent_inter_message_glue: List[int] = probe_inter_message_glue(agent_tokenizer)
+        self._opponent_inter_message_glue: List[int] = probe_inter_message_glue(opponent_tokenizer)
+        self._agent_eos_token_id: Optional[int] = getattr(agent_tokenizer, "eos_token_id", None)
+        self._opponent_eos_token_id: Optional[int] = getattr(opponent_tokenizer, "eos_token_id", None)
 
     async def rollout(
         self,
@@ -121,6 +133,12 @@ class CoTrainingOrchestrator:
             try:
                 output = await agent_generate_fn(agent_tokens, sampling_params)
 
+                # Fix 4: inference-server error detection.
+                if output.get("error"):
+                    logger.warning(f"Agent inference error at turn {turn}: {output['error']}")
+                    status = TrajectoryStatus.FAILED
+                    break
+
                 meta = output.get("meta_info", {})
                 finish_reason = meta.get("finish_reason", {})
                 if isinstance(finish_reason, dict) and finish_reason.get("type") == "abort":
@@ -148,6 +166,23 @@ class CoTrainingOrchestrator:
             agent_masks.extend([1] * len(response_tokens))  # agent trained
             agent_logprobs.extend(response_logprobs)
 
+            # Fix 3: max_tokens truncation guard for agent.
+            agent_hit_eos = (
+                bool(response_tokens)
+                and self._agent_eos_token_id is not None
+                and response_tokens[-1] == self._agent_eos_token_id
+            )
+            if not agent_hit_eos:
+                status = TrajectoryStatus.TRUNCATED
+                num_turns = turn + 1
+                break
+
+            # Fix 2: append inter-message glue after a completed agent response.
+            if self._agent_inter_message_glue:
+                agent_tokens.extend(self._agent_inter_message_glue)
+                agent_masks.extend([0] * len(self._agent_inter_message_glue))
+                agent_logprobs.extend([0.0] * len(self._agent_inter_message_glue))
+
             # 4. Snapshot opponent messages before env.step() mutates them
             opp_messages_before_step = list(env.persuadee_messages)
 
@@ -165,12 +200,14 @@ class CoTrainingOrchestrator:
             #    [... existing ..., {"role": "user", ...}, {"role": "assistant", ...}]
             #    We compute token deltas for each separately.
 
-            # 6a. Agent's message as "user" in opponent's token stream (loss_mask=0)
+            # 6a. Agent's message as "user" in opponent's token stream (loss_mask=0).
+            # Fix 1: delta correctly includes the opponent's next assistant
+            # generation prompt via the canonical helper.
             opp_messages_with_user = opp_messages_before_step + [
                 {"role": "user", "content": action}
             ]
-            opp_user_delta = self._get_token_delta_simple(
-                self.opponent_tokenizer, opp_messages_with_user, None, lambda x: x
+            opp_user_delta, _ = get_token_delta(
+                self.opponent_tokenizer, opp_messages_with_user,
             )
             opponent_tokens.extend(opp_user_delta)
             opponent_masks.extend([0] * len(opp_user_delta))
@@ -184,19 +221,35 @@ class CoTrainingOrchestrator:
                 opponent_tokens.extend(opp_response_tokens)
                 opponent_masks.extend([1] * len(opp_response_tokens))
                 opponent_logprobs.extend(opp_response_logprobs)
+
+                # Fix 2: append inter-message glue after the opponent's EOS.
+                opp_hit_eos = (
+                    bool(opp_response_tokens)
+                    and self._opponent_eos_token_id is not None
+                    and opp_response_tokens[-1] == self._opponent_eos_token_id
+                )
+                if opp_hit_eos and self._opponent_inter_message_glue:
+                    opponent_tokens.extend(self._opponent_inter_message_glue)
+                    opponent_masks.extend([0] * len(self._opponent_inter_message_glue))
+                    opponent_logprobs.extend(
+                        [0.0] * len(self._opponent_inter_message_glue)
+                    )
             else:
                 # API-based opponent — no token-level tracking, use re-tokenization
-                opp_resp_delta = self._get_token_delta_simple(
-                    self.opponent_tokenizer, env.persuadee_messages, None, lambda x: x
+                opp_resp_delta, _ = get_token_delta(
+                    self.opponent_tokenizer, env.persuadee_messages,
                 )
                 opponent_tokens.extend(opp_resp_delta)
                 opponent_masks.extend([0] * len(opp_resp_delta))
                 opponent_logprobs.extend([0.0] * len(opp_resp_delta))
 
-            # Track opponent's response in agent's token stream (loss_mask=0)
+            # Track opponent's response in agent's token stream (loss_mask=0).
+            # Fix 1: delta correctly includes the agent's next assistant
+            # generation prompt via the canonical helper.
             agent_messages.append({"role": "user", "content": obs})
-            agent_delta, _ = self._get_token_delta_for_messages(
-                self.agent_tokenizer, agent_messages, tools_schema, postprocess
+            agent_delta, _ = get_token_delta(
+                self.agent_tokenizer, agent_messages,
+                tools_schema=tools_schema, postprocess=postprocess,
             )
             agent_tokens.extend(agent_delta)
             agent_masks.extend([0] * len(agent_delta))  # not trained
@@ -213,8 +266,11 @@ class CoTrainingOrchestrator:
                 break
 
         # Build both trajectories
-        # Agent is rewarded for persuasion success; opponent is rewarded for resistance
-        opponent_reward = 1.0 - total_reward
+        if self.cooperative:
+            opponent_reward = total_reward
+        else:
+            # Adversarial: agent wants high reward, opponent resists
+            opponent_reward = 1.0 - total_reward
         agent_traj = self._build_trajectory(
             agent_tokens, agent_masks, agent_logprobs,
             agent_messages, num_turns, task_info, status, total_reward, env_info,
@@ -248,27 +304,15 @@ class CoTrainingOrchestrator:
         tools_schema: Optional[List[Dict[str, Any]]],
         postprocess: Callable[[str], str],
     ) -> Tuple[List[int], List[int]]:
-        """Calculate token delta for the last message added."""
-        template_kwargs: Dict[str, Any] = {}
-        if tools_schema:
-            template_kwargs["tools"] = tools_schema
+        """Thin wrapper around the canonical ``get_token_delta`` helper.
 
-        curr = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False, **template_kwargs,
+        Kept for backward-compatibility with existing callers. All rollout
+        logic in this class now routes through ``get_token_delta`` from
+        ``usim.core.types`` directly.
+        """
+        return get_token_delta(
+            tokenizer, messages, tools_schema=tools_schema, postprocess=postprocess,
         )
-        curr = postprocess(curr)
-
-        prev_messages = messages[:-1]
-        prev = tokenizer.apply_chat_template(
-            prev_messages, tokenize=False, add_generation_prompt=False, **template_kwargs,
-        )
-        prev = postprocess(prev)
-
-        delta_text = curr[len(prev):]
-        new_tokens = tokenizer.encode(delta_text, add_special_tokens=False)
-        loss_mask = [0] * len(new_tokens)
-
-        return new_tokens, loss_mask
 
     def _get_token_delta_simple(
         self,
@@ -278,39 +322,10 @@ class CoTrainingOrchestrator:
         postprocess: Callable[[str], str],
     ) -> List[int]:
         """Get token delta for the last message (returns only token IDs)."""
-        tokens, _ = self._get_token_delta_for_messages(
-            tokenizer, messages, tools_schema, postprocess
+        tokens, _ = get_token_delta(
+            tokenizer, messages, tools_schema=tools_schema, postprocess=postprocess,
         )
         return tokens
-
-    def _get_token_delta(
-        self,
-        tokenizer: Any,
-        prev_messages: List[Dict[str, Any]],
-        curr_messages: List[Dict[str, Any]],
-        tools_schema: Optional[List[Dict[str, Any]]],
-        postprocess: Callable[[str], str],
-    ) -> Tuple[List[int], List[int]]:
-        """Calculate token delta between two message lists."""
-        template_kwargs: Dict[str, Any] = {}
-        if tools_schema:
-            template_kwargs["tools"] = tools_schema
-
-        curr = tokenizer.apply_chat_template(
-            curr_messages, tokenize=False, add_generation_prompt=False, **template_kwargs,
-        )
-        curr = postprocess(curr)
-
-        prev = tokenizer.apply_chat_template(
-            prev_messages, tokenize=False, add_generation_prompt=False, **template_kwargs,
-        )
-        prev = postprocess(prev)
-
-        delta_text = curr[len(prev):]
-        new_tokens = tokenizer.encode(delta_text, add_special_tokens=False)
-        loss_mask = [0] * len(new_tokens)
-
-        return new_tokens, loss_mask
 
     def _build_trajectory(
         self,
