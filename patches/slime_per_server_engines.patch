@@ -1,11 +1,11 @@
 diff --git a/slime/ray/rollout.py b/slime/ray/rollout.py
-index 6a0ddab9..cdf861b9 100644
+index de84e10d..patch0001 100644
 --- a/slime/ray/rollout.py
 +++ b/slime/ray/rollout.py
-@@ -478,6 +478,32 @@ class RolloutManager:
-         if srv:
+@@ -479,6 +479,30 @@ class RolloutManager:
              srv.num_new_engines = 0
- 
+
+
 +    def get_server_engines_and_lock(self, server_name: str):
 +        """Return engines for a specific named server.
 +

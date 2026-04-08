@@ -341,7 +341,6 @@ def _reload_model_weights(args, model_name: str, checkpoint_path: str):
 
     import aiohttp
 
-
     async def _do_reload():
         url = _get_model_url(args, model_name, "/update_weights_from_disk")
         logger.info(f"Reloading {model_name} weights from {checkpoint_path} via {url}")
