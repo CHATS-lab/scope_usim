@@ -89,6 +89,9 @@ async def _usim_generate_single(
         max_turns = getattr(args, "max_turns", 30)
 
         user_prompt_prefix = getattr(args, "usim_user_prompt_prefix", "") or ""
+        verbalized_sampling = bool(getattr(args, "usim_verbalized_sampling", False))
+        vs_num_samples = int(getattr(args, "usim_vs_num_samples", 5))
+        vs_method = str(getattr(args, "usim_vs_method", "prob"))
         env = Tau2Environment(
             domain=domain,
             task_id=task.id,
@@ -97,6 +100,9 @@ async def _usim_generate_single(
             user_api_key=user_api_key,
             max_turns=max_turns,
             user_prompt_prefix=user_prompt_prefix,
+            verbalized_sampling=verbalized_sampling,
+            vs_num_samples=vs_num_samples,
+            vs_method=vs_method,
         )
 
         sglang_url = (
