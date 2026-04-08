@@ -31,6 +31,8 @@ from usim.core.types import (
     UserState,
     AgentState,
     compute_token_delta,
+    get_token_delta,
+    probe_inter_message_glue,
 )
 from usim.core.model_adapter import ModelAdapter
 from usim.core.api_model_adapter import OpenAIModelAdapter, create_openai_model_adapter
@@ -52,6 +54,8 @@ __all__ = [
     "create_openai_model_adapter",
     "UserSimOrchestrator",
     "compute_token_delta",
+    "get_token_delta",
+    "probe_inter_message_glue",
 ]
 
 # Conditional imports for optional backends (avoid requiring all dependencies)

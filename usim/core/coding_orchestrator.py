@@ -23,6 +23,7 @@ from usim.core.types import (
     TrajectoryStatus,
     TrainableRole,
     UserSimConfig,
+    get_token_delta,
 )
 
 logger = logging.getLogger(__name__)
@@ -505,7 +506,16 @@ class CodingAgentOrchestrator:
         messages: List[Dict[str, Any]],
         role: str,
     ) -> Tuple[List[int], List[int]]:
-        """Calculate token delta for the last message added."""
+        """Calculate token delta for the last message added.
+
+        Uses the canonical ``get_token_delta`` helper from ``usim.core.types``
+        to ensure the delta for a user/tool message includes the
+        ``<|im_start|>assistant\\n`` generation prompt for the next turn.
+        The ``role`` argument controls the final loss mask override (coding
+        rollouts distinguish assistant / user / tool / error roles with
+        different mask semantics), so we always discard the canonical mask
+        and rebuild from ``_compute_loss_mask_for_role``.
+        """
         if not messages:
             return [], []
 
@@ -514,39 +524,25 @@ class CodingAgentOrchestrator:
 
         tokenizer = self.agent_model.tokenizer
         tmpl_kwargs = self._chat_template_kwargs
-        curr_text = tokenizer.apply_chat_template(
-            messages,
-            tools=self._tools_schema,
-            tokenize=False,
-            add_generation_prompt=False,
-            **tmpl_kwargs,
-        )
-        prev_messages = messages[:-1]
 
-        if messages[-1].get("role") == "assistant":
-            prev_text = (
-                tokenizer.apply_chat_template(
-                    prev_messages,
-                    tools=self._tools_schema,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                    **tmpl_kwargs,
-                )
-                if prev_messages
-                else ""
+        # Build a postprocess closure that threads through the coding
+        # orchestrator's chat_template_kwargs. get_token_delta does not
+        # know about tmpl_kwargs directly, so we invoke the template
+        # ourselves via a helper that matches its interface.
+        def _apply(msgs: List[Dict[str, Any]], add_gen: bool) -> str:
+            if not msgs:
+                return ""
+            return tokenizer.apply_chat_template(
+                msgs,
+                tools=self._tools_schema,
+                tokenize=False,
+                add_generation_prompt=add_gen,
+                **tmpl_kwargs,
             )
-        else:
-            prev_text = (
-                tokenizer.apply_chat_template(
-                    prev_messages,
-                    tools=self._tools_schema,
-                    tokenize=False,
-                    add_generation_prompt=False,
-                    **tmpl_kwargs,
-                )
-                if prev_messages
-                else ""
-            )
+
+        is_assistant = messages[-1].get("role") == "assistant"
+        curr_text = _apply(messages, add_gen=not is_assistant)
+        prev_text = _apply(messages[:-1], add_gen=is_assistant)
 
         delta_text = curr_text[len(prev_text):]
         new_tokens = tokenizer.encode(delta_text, add_special_tokens=False)

@@ -244,57 +244,133 @@ class UserSimConfig:
     stop_tokens: List[str] = field(default_factory=lambda: ["###STOP###", "###TRANSFER###"])
 
 
+def get_token_delta(
+    tokenizer: Any,
+    messages: List[Dict[str, Any]],
+    tools_schema: Optional[List[Dict[str, Any]]] = None,
+    postprocess: Optional[Any] = None,
+) -> Tuple[List[int], List[int]]:
+    """Compute incremental tokens contributed by the last message.
+
+    Canonical multi-turn token delta helper. This is the SINGLE source of truth
+    for per-turn delta computation across orchestrators. Do not duplicate this
+    logic elsewhere.
+
+    The critical invariant: when the last message is a user/tool/system message,
+    the returned delta MUST include the ``<|im_start|>assistant\\n`` generation
+    prompt that precedes the next assistant turn. Otherwise the next call to the
+    inference server is fed a prompt with no assistant cue and the model goes
+    out of distribution, hallucinating a fake role prefix that then gets
+    appended to the training buffer with ``loss_mask=1`` and reinforced every
+    RL step.
+
+    Correct toggling:
+
+    - Last msg is ``assistant``: ``curr`` has no generation prompt, ``prev``
+      has one (because the inference server already consumed the assistant
+      prompt when generating).
+    - Last msg is ``user``/``tool``/``system``: ``curr`` has the generation
+      prompt (so the next generate call has the right input), ``prev`` does
+      not.
+
+    Args:
+        tokenizer: HuggingFace tokenizer with ``apply_chat_template``.
+        messages: Current conversation messages INCLUDING the new message.
+        tools_schema: Optional tool schemas passed through to the chat template.
+        postprocess: Optional text transform applied to both ``curr`` and
+            ``prev`` before computing the delta. Used by tau2-bench to
+            reformulate the default multi-tool instruction.
+
+    Returns:
+        Tuple of ``(new_tokens, loss_mask)`` for the last message only.
+        ``loss_mask`` is 1 for assistant content and 0 for all other roles
+        (including the assistant generation prompt glue that precedes a
+        user-turn's reply, which is template structure, not model output).
+    """
+    is_assistant = messages[-1].get("role") == "assistant"
+
+    template_kwargs: Dict[str, Any] = {}
+    if tools_schema:
+        template_kwargs["tools"] = tools_schema
+
+    curr = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=not is_assistant,
+        **template_kwargs,
+    )
+    prev_messages = messages[:-1]
+    if prev_messages:
+        prev = tokenizer.apply_chat_template(
+            prev_messages,
+            tokenize=False,
+            add_generation_prompt=is_assistant,
+            **template_kwargs,
+        )
+    else:
+        prev = ""
+
+    if postprocess is not None:
+        curr = postprocess(curr)
+        prev = postprocess(prev)
+
+    delta_text = curr[len(prev):]
+    new_tokens = tokenizer.encode(delta_text, add_special_tokens=False)
+    loss_mask = [1 if is_assistant else 0] * len(new_tokens)
+    return new_tokens, loss_mask
+
+
+def probe_inter_message_glue(tokenizer: Any) -> List[int]:
+    """Probe the tokens the chat template emits AFTER an assistant EOS.
+
+    Most chat templates (Qwen, Llama 3, Mistral, Gemma, etc.) insert a fixed
+    suffix after each assistant message's EOS token, typically a single
+    newline ``\\n`` (token 198 on Qwen). Inference servers like SGLang stop
+    generation at the EOS token and do NOT return this trailing glue, which
+    creates off-by-one drift in the accumulated token buffer unless we append
+    the glue ourselves after each completed assistant turn.
+
+    Call this ONCE at orchestrator init and cache the result. The probe does
+    not depend on the conversation content so this is O(1) per episode.
+
+    Args:
+        tokenizer: HuggingFace tokenizer with ``apply_chat_template``.
+
+    Returns:
+        List of token IDs to append after each assistant response that ended
+        naturally at EOS. Empty list if no glue is detected (should be rare).
+    """
+    probe = tokenizer.apply_chat_template(
+        [{"role": "user", "content": "x"},
+         {"role": "assistant", "content": "y"}],
+        tokenize=True,
+        add_generation_prompt=False,
+    )
+    if not isinstance(probe, list):
+        probe = list(probe)
+    eos = tokenizer.eos_token_id
+    if eos is None:
+        return []
+    # Find the LAST EOS token and return everything after it.
+    for i in range(len(probe) - 1, -1, -1):
+        if probe[i] == eos:
+            return probe[i + 1:]
+    return []
+
+
+# Backward-compatible alias. New code should import ``get_token_delta``.
+# Note: the legacy signature did not accept tools_schema/postprocess; callers
+# that pass only (tokenizer, messages) continue to work unchanged.
 def compute_token_delta(
     tokenizer: Any,
     messages: List[Dict[str, Any]],
 ) -> Tuple[List[int], List[int]]:
-    """Compute incremental tokens from adding last message to conversation.
+    """Deprecated alias for ``get_token_delta``.
 
-    This function implements token-in-token-out tracking.
-    It calculates the token delta for the most recent message, enabling
-    synchronization between generation and training.
-
-    Args:
-        tokenizer: HuggingFace tokenizer with apply_chat_template method
-        messages: Current conversation messages including the new message
-
-    Returns:
-        Tuple of (new_tokens, loss_mask) for the last message only
+    Kept only for backward compatibility with test_types.py. All active rollout
+    code should import and call ``get_token_delta`` directly.
     """
-    curr = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=False,
-    )
-
-    # Get previous state (before last message)
-    prev_messages = messages[:-1]
-
-    # Determine if we need generation prompt for previous state
-    if messages[-1]["role"] == "assistant":
-        prev = tokenizer.apply_chat_template(
-            prev_messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-    else:
-        prev = tokenizer.apply_chat_template(
-            prev_messages,
-            tokenize=False,
-            add_generation_prompt=False,
-        )
-
-    # Extract delta (text added by new message)
-    delta_text = curr[len(prev):]
-    new_tokens = tokenizer.encode(delta_text, add_special_tokens=False)
-
-    # Set loss mask based on role: 1 for assistant tokens, 0 for others
-    if messages[-1]["role"] == "assistant":
-        loss_mask = [1] * len(new_tokens)  # Train on assistant tokens
-    else:
-        loss_mask = [0] * len(new_tokens)  # Don't train on user/tool/env tokens
-
-    return new_tokens, loss_mask
+    return get_token_delta(tokenizer, messages)
 
 
 @dataclass
