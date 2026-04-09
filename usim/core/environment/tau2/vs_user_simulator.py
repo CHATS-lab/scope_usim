@@ -22,7 +22,7 @@ from tau2.user.base import UserState, ValidUserInputMessage
 from tau2.user.user_simulator import UserSimulator
 from tau2.utils.llm_utils import generate
 
-from usim.core.environment.tau2.vs_parsing import (
+from usim.core.vs_parsing import (
     extract_json_object,
     sample_candidate,
     validate_candidates,

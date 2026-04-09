@@ -63,8 +63,90 @@ https://www.savethechildren.org/
 </rules>""")
 
 
+# Verbalized Sampling instruction appended to the persuadee system prompt
+# when `--usim-verbalized-sampling` is enabled. Crucial detail: each candidate
+# must preserve the [DONATE $N] / [GIVE $N] markers when the persuadee
+# decides to donate, otherwise the reward extraction in usim.p4g.reward
+# won't fire for the sampled response.
+_P4G_VS_PROB_INSTRUCTION = """
+## Response Diversity Instructions
+
+Instead of committing to a single response, generate {n} plausible replies
+you (as the persuadee) might naturally give to your chat partner, along with
+an estimated probability for each. The replies should be genuinely diverse —
+differ in phrasing, tone, skepticism level, and (where appropriate) whether
+or not to donate.
+
+IMPORTANT: if a candidate reply represents a decision to donate or give
+money, that candidate MUST include the literal structured marker
+[DONATE $N] or [GIVE $N] where N is the amount. Otherwise the donation
+will not be registered. Candidates that do not involve donating should
+omit the marker entirely.
+
+Return ONLY a JSON object with the key "responses" (a list of dictionaries,
+each with 'text' and 'probability'):
+- 'text': the reply string only, under {word_limit} words, no explanation
+- 'probability': a number in [0.0, 1.0] representing how likely you are to
+  give this particular reply (the probabilities should roughly sum to 1.0)
+
+Example format:
+{{"responses": [{{"text": "I'm not sure, I earned this money and want to spend it on myself.", "probability": 0.5}}, {{"text": "That's a worthy cause. [GIVE $0.25]", "probability": 0.2}}, {{"text": "Can you tell me more about the charity first?", "probability": 0.3}}]}}
+
+Output ONLY the JSON object, no markdown fences, no explanations, no extra
+text before or after.
+""".strip()
+
+
+_P4G_VS_RANDOM_INSTRUCTION = """
+## Response Diversity Instructions
+
+Instead of committing to a single response, generate {n} plausible replies
+you (as the persuadee) might naturally give to your chat partner. The
+replies should be genuinely diverse — differ in phrasing, tone, skepticism
+level, and (where appropriate) whether or not to donate.
+
+IMPORTANT: if a candidate reply represents a decision to donate or give
+money, that candidate MUST include the literal structured marker
+[DONATE $N] or [GIVE $N] where N is the amount.
+
+Return ONLY a JSON object with the key "responses" (a list of dictionaries,
+each with a 'text' field, one per candidate reply, under {word_limit}
+words each).
+
+Example format:
+{{"responses": [{{"text": "I'm not sure, I earned this money."}}, {{"text": "That's a worthy cause. [GIVE $0.25]"}}, {{"text": "Can you tell me more first?"}}]}}
+
+Output ONLY the JSON object, no markdown fences, no explanations.
+""".strip()
+
+
+def build_p4g_vs_instruction(
+    word_limit: int, num_samples: int = 5, method: str = "prob"
+) -> str:
+    """Return the VS instruction block to append to the persuadee prompt.
+
+    Args:
+        word_limit: Max words per candidate reply (same as the base prompt).
+        num_samples: Number of candidate replies to request.
+        method: ``"prob"`` (weight by verbalized probability) or ``"random"``
+            (uniform over candidates).
+    """
+    if method == "prob":
+        template = _P4G_VS_PROB_INSTRUCTION
+    elif method == "random":
+        template = _P4G_VS_RANDOM_INSTRUCTION
+    else:
+        raise ValueError(f"method must be 'prob' or 'random', got {method!r}")
+    return template.format(n=num_samples, word_limit=word_limit)
+
+
 def build_persuadee_system_prompt(
-    persona_text: str, word_limit: int = 50, prompt_prefix: str = ""
+    persona_text: str,
+    word_limit: int = 50,
+    prompt_prefix: str = "",
+    verbalized_sampling: bool = False,
+    vs_num_samples: int = 5,
+    vs_method: str = "prob",
 ) -> str:
     """Build system prompt for the persuadee (user simulator).
 
@@ -72,12 +154,20 @@ def build_persuadee_system_prompt(
         persona_text: Persona text block (with <persona> tags)
         word_limit: Max words per response
         prompt_prefix: Optional prefix prepended to the system prompt (for RL-Configured baseline)
+        verbalized_sampling: When True, append the VS instruction block so
+            the persuadee emits a JSON object containing N candidate replies
+            with verbalized probabilities. Callers must then sample one of
+            the candidates and pass it as the persuadee's actual reply.
+        vs_num_samples: Number of candidate replies the persuadee should
+            generate when VS is enabled.
+        vs_method: VS sampling mode for the instruction template (``"prob"``
+            or ``"random"``). The actual sampling happens in the caller.
 
     Returns:
         Full system prompt string
     """
     prefix = f"{prompt_prefix.strip()}\n\n" if prompt_prefix else ""
-    return prefix + dedent(f"""\
+    base = dedent(f"""\
 You are an Amazon Mechanical Turk worker completing a $2 communication task.
 - You are motivated by this task payment — you value every cent you earn.
 - Act naturally as the person in the <persona> tag—think and respond as they would, including their quirks, beliefs, biases, and reasoning.
@@ -110,3 +200,8 @@ For example, to give $0.2, say [GIVE $0.2], or to donate $1.25, say [DONATE $1.2
 You MUST say it in this format, otherwise the donation will not be made.
 - Your response should not exceed {word_limit} words.
 </rules>""")
+    if verbalized_sampling:
+        return prefix + base + "\n\n" + build_p4g_vs_instruction(
+            word_limit=word_limit, num_samples=vs_num_samples, method=vs_method
+        )
+    return prefix + base

@@ -10,7 +10,7 @@ tau2 is missing.
 import random
 import pytest
 
-from usim.core.environment.tau2.vs_parsing import (
+from usim.core.vs_parsing import (
     extract_json_object,
     sample_candidate,
     strip_code_fence,

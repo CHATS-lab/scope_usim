@@ -60,6 +60,36 @@ def add_p4g_train_arguments(parser: argparse.ArgumentParser) -> None:
         help="Environment variable name for API key",
     )
 
+    usim_group.add_argument(
+        "--usim-verbalized-sampling",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable Verbalized Sampling (arxiv:2510.01171) for the P4G "
+            "persuadee. The persuadee will be prompted to generate N "
+            "candidate replies with verbalized probabilities, then one is "
+            "sampled per turn. The VS instruction explicitly asks the model "
+            "to preserve the [DONATE $N] / [GIVE $N] donation markers in "
+            "each candidate so the reward extraction still works."
+        ),
+    )
+    usim_group.add_argument(
+        "--usim-vs-num-samples",
+        type=int,
+        default=5,
+        help="Number of candidate replies the VS persuadee generates per turn (default: 5).",
+    )
+    usim_group.add_argument(
+        "--usim-vs-method",
+        type=str,
+        default="prob",
+        choices=["prob", "random"],
+        help=(
+            "VS sampling method: 'prob' (weight by verbalized probability, "
+            "default) or 'random' (uniform over candidates)."
+        ),
+    )
+
     # P4G-specific args
     from usim.p4g.rollout import add_p4g_arguments
 
@@ -106,6 +136,12 @@ def main() -> None:
         logger.info(f"Persuadee (fixed): {models} via {args.usim_fixed_opponent_base_url}")
     else:
         logger.info("Persuadee: same SGLang model (no fixed opponent)")
+    if getattr(args, "usim_verbalized_sampling", False):
+        logger.info(
+            f"Persuadee: Verbalized Sampling enabled "
+            f"(n={getattr(args, 'usim_vs_num_samples', 5)}, "
+            f"method={getattr(args, 'usim_vs_method', 'prob')})"
+        )
     logger.info("=" * 60)
 
     # Start training
