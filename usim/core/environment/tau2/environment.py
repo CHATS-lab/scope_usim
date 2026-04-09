@@ -159,6 +159,76 @@ class _ConfiguredAgentGymEnv(AgentGymEnv):
         return user
 
 
+class _VerbalizedSamplingAgentGymEnv(AgentGymEnv):
+    """AgentGymEnv subclass that uses a Verbalized Sampling user simulator.
+
+    Overrides ``_get_user()`` to return a
+    ``VerbalizedSamplingUserSimulator`` instead of the default
+    ``UserSimulator``. All other gym behavior (tool dispatch, reward
+    computation, etc.) is unchanged.
+    """
+
+    def __init__(
+        self,
+        *args,
+        vs_num_samples: int = 5,
+        vs_method: str = "prob",
+        user_prompt_prefix: str = "",
+        **kwargs,
+    ):
+        self._vs_num_samples = vs_num_samples
+        self._vs_method = vs_method
+        self._user_prompt_prefix = user_prompt_prefix
+        super().__init__(*args, **kwargs)
+
+    def _get_user(self):
+        # We cannot call super()._get_user() because that would construct
+        # a plain UserSimulator. Replicate the setup with our VS subclass.
+        from tau2.user.user_simulator import DummyUser
+
+        from usim.core.environment.tau2.vs_user_simulator import (
+            VerbalizedSamplingUserSimulator,
+        )
+
+        environment = self._get_environment()
+        task = self._get_task()
+        try:
+            user_tools = environment.get_user_tools()
+        except ValueError:
+            user_tools = None
+
+        if self.solo_mode:
+            return DummyUser()
+
+        user = VerbalizedSamplingUserSimulator(
+            tools=user_tools,
+            instructions=task.user_scenario,
+            llm=self.user_llm,
+            llm_args=self.user_llm_args,
+            vs_num_samples=self._vs_num_samples,
+            vs_method=self._vs_method,
+        )
+
+        # Optional: also stack the behavioral prefix on top of VS, so
+        # --usim-user-prompt-prefix and --usim-verbalized-sampling compose.
+        if self._user_prompt_prefix:
+            original_fn = type(user).system_prompt.fget
+            prefix = self._user_prompt_prefix
+
+            @property
+            def patched_system_prompt(self_inner):
+                return prefix.strip() + "\n\n" + original_fn(self_inner)
+
+            patched_cls = type(
+                f"_Patched{type(user).__name__}",
+                (type(user),),
+                {"system_prompt": patched_system_prompt},
+            )
+            user.__class__ = patched_cls
+
+        return user
+
+
 class Tau2Environment:
     """Tau2-bench environment wrapping AgentGymEnv.
 
@@ -176,6 +246,9 @@ class Tau2Environment:
         user_api_key: Optional[str] = None,
         max_turns: int = 30,
         user_prompt_prefix: str = "",
+        verbalized_sampling: bool = False,
+        vs_num_samples: int = 5,
+        vs_method: str = "prob",
     ):
         self._domain = domain
         self._task_id = task_id
@@ -188,7 +261,16 @@ class Tau2Environment:
             if not user_model.startswith("openrouter/"):
                 litellm_model = f"openrouter/{user_model}"
 
-        env_cls = _ConfiguredAgentGymEnv if user_prompt_prefix else AgentGymEnv
+        # Pick the right env subclass. VS takes precedence over the
+        # configured-prefix baseline: the VS env class still accepts a
+        # ``user_prompt_prefix`` kwarg and composes both.
+        if verbalized_sampling:
+            env_cls = _VerbalizedSamplingAgentGymEnv
+        elif user_prompt_prefix:
+            env_cls = _ConfiguredAgentGymEnv
+        else:
+            env_cls = AgentGymEnv
+
         env_kwargs = dict(
             domain=domain,
             task_id=task_id,
@@ -199,7 +281,11 @@ class Tau2Environment:
                 "api_key": user_api_key,
             },
         )
-        if user_prompt_prefix:
+        if verbalized_sampling:
+            env_kwargs["vs_num_samples"] = vs_num_samples
+            env_kwargs["vs_method"] = vs_method
+            env_kwargs["user_prompt_prefix"] = user_prompt_prefix
+        elif user_prompt_prefix:
             env_kwargs["user_prompt_prefix"] = user_prompt_prefix
 
         self._env = env_cls(**env_kwargs)

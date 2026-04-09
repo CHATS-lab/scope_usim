@@ -21,6 +21,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import litellm
 
 from usim.core.types import Message
+from usim.core.vs_parsing import (
+    extract_json_object,
+    sample_candidate,
+    validate_candidates,
+)
 from usim.p4g.prompts import build_persuadee_system_prompt, build_persuader_system_prompt
 from usim.p4g.reward import compute_p4g_reward
 
@@ -50,6 +55,10 @@ class P4gEnvironment:
         conversation_id: str = "",
         persuadee_prompt_prefix: str = "",
         opponent_generate_fn: Optional[Callable] = None,
+        verbalized_sampling: bool = False,
+        vs_num_samples: int = 5,
+        vs_method: str = "prob",
+        vs_max_retries: int = 2,
     ):
         """Initialize P4G environment.
 
@@ -68,18 +77,44 @@ class P4gEnvironment:
                 Signature: async (input_ids: List[int], sampling_params: Dict) -> Dict
                 Returns {"text", "token_ids", "logprobs", "meta_info"}.
                 When set, replaces litellm API calls for the persuadee.
+            verbalized_sampling: Enable Verbalized Sampling (arxiv:2510.01171)
+                for the persuadee. The persuadee system prompt is augmented
+                with an instruction to emit a JSON object of N candidate
+                replies with verbalized probabilities; we then parse the
+                JSON and sample one candidate per turn. Only applies to the
+                litellm API path (``_call_persuadee_via_api``). Ignored when
+                ``opponent_generate_fn`` is set (co-training path).
+            vs_num_samples: Number of candidate replies the persuadee should
+                generate per turn when ``verbalized_sampling`` is enabled.
+            vs_method: ``"prob"`` (weight by verbalized probability, default)
+                or ``"random"`` (uniform over candidates).
+            vs_max_retries: How many times to retry if the persuadee's
+                response can't be parsed as a VS JSON object. After all
+                retries are exhausted we fall back to using the raw response
+                verbatim.
         """
         self._num_exchanges = num_turns // 2
         self._word_limit = word_limit
         self._num_turns = num_turns
         self._conversation_id = conversation_id
 
+        # Verbalized Sampling config
+        self._verbalized_sampling = bool(verbalized_sampling)
+        self._vs_num_samples = int(vs_num_samples)
+        self._vs_method = str(vs_method)
+        self._vs_max_retries = int(vs_max_retries)
+
         # Build system prompts
         self._persuader_system = build_persuader_system_prompt(
             persuader_persona, word_limit, num_turns
         )
         self._persuadee_system = build_persuadee_system_prompt(
-            persuadee_persona, word_limit, prompt_prefix=persuadee_prompt_prefix
+            persuadee_persona,
+            word_limit,
+            prompt_prefix=persuadee_prompt_prefix,
+            verbalized_sampling=self._verbalized_sampling,
+            vs_num_samples=self._vs_num_samples,
+            vs_method=self._vs_method,
         )
 
         # Pluggable opponent generation (for co-training/self-play)
@@ -219,7 +254,15 @@ class P4gEnvironment:
         return output["text"]
 
     async def _call_persuadee_via_api(self) -> str:
-        """Call persuadee LLM via litellm (original API path)."""
+        """Call persuadee LLM via litellm (original API path).
+
+        When ``verbalized_sampling`` is enabled, delegates to
+        ``_call_persuadee_via_api_vs`` which parses the JSON response and
+        samples one candidate. Otherwise returns the raw litellm response.
+        """
+        if self._verbalized_sampling:
+            return await self._call_persuadee_via_api_vs()
+
         try:
             kwargs = {
                 "model": self._persuadee_model,
@@ -250,6 +293,83 @@ class P4gEnvironment:
         except Exception as e:
             logger.error(f"Persuadee API call failed ({self._persuadee_model}): {e}")
             raise
+
+    async def _call_persuadee_via_api_vs(self) -> str:
+        """Call persuadee LLM and sample one response via Verbalized Sampling.
+
+        The persuadee system prompt (built at init time) instructs the LLM
+        to emit a JSON object with ``{responses: [{text, probability}, ...]}``.
+        We parse the JSON, sample one candidate (weighted by probability
+        for ``method="prob"``, uniform for ``method="random"``), and return
+        the sampled text as if it were the original response.
+
+        On parse failure we retry up to ``vs_max_retries`` times, then fall
+        back to returning the raw response verbatim so a transient parse
+        error does not abort the whole episode.
+        """
+        kwargs = {
+            "model": self._persuadee_model,
+            "messages": self._persuadee_messages,
+            "max_tokens": self._persuadee_max_tokens,
+            "temperature": 0.7,
+        }
+        if self._persuadee_api_key:
+            kwargs["api_key"] = self._persuadee_api_key
+
+        last_content = ""
+        for attempt in range(self._vs_max_retries + 1):
+            try:
+                response = await litellm.acompletion(**kwargs)
+            except Exception as e:
+                logger.error(
+                    f"Persuadee VS API call failed ({self._persuadee_model}): {e}"
+                )
+                raise
+
+            content = response.choices[0].message.content or ""
+            last_content = content
+
+            if not content.strip():
+                logger.warning(
+                    f"Persuadee VS returned empty response: "
+                    f"model={self._persuadee_model}, "
+                    f"finish_reason={response.choices[0].finish_reason}"
+                )
+                continue
+
+            parsed = extract_json_object(content)
+            if parsed is None:
+                logger.warning(
+                    f"VS parse failed (attempt {attempt + 1}/"
+                    f"{self._vs_max_retries + 1}): {content[:200]!r}"
+                )
+                continue
+
+            candidates = validate_candidates(parsed)
+            if not candidates:
+                logger.warning(
+                    f"VS JSON had no valid candidates (attempt {attempt + 1}/"
+                    f"{self._vs_max_retries + 1}): {content[:200]!r}"
+                )
+                continue
+
+            sampled_text = sample_candidate(candidates, method=self._vs_method)
+            logger.debug(
+                f"P4G VS sampled 1/{len(candidates)} candidates "
+                f"(method={self._vs_method}): {sampled_text[:80]!r}"
+            )
+            self.last_opponent_output = None
+            return sampled_text
+
+        # All retries exhausted. Fall back to the raw response verbatim so
+        # we don't abort the episode on a transient parse failure. The
+        # donation-marker regex will still fire on well-formed raw text.
+        logger.warning(
+            "P4G VS parsing failed after %d attempts; falling back to raw response",
+            self._vs_max_retries + 1,
+        )
+        self.last_opponent_output = None
+        return last_content
 
     def _compute_reward(self) -> float:
         """Compute reward from donation signals in persuadee messages."""

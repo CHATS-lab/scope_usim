@@ -100,6 +100,33 @@ def add_usim_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
     group.add_argument(
+        "--usim-verbalized-sampling",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable Verbalized Sampling (arxiv:2510.01171) for the tau2 user "
+            "simulator. The user sim will be prompted to generate N candidate "
+            "responses with verbalized probabilities, then one is sampled."
+        ),
+    )
+    group.add_argument(
+        "--usim-vs-num-samples",
+        type=int,
+        default=5,
+        help="Number of candidate responses the VS user sim generates per turn (default: 5).",
+    )
+    group.add_argument(
+        "--usim-vs-method",
+        type=str,
+        default="prob",
+        choices=["prob", "random"],
+        help=(
+            "VS sampling method: 'prob' (weight by verbalized probability, "
+            "default) or 'random' (uniform over candidates)."
+        ),
+    )
+
+    group.add_argument(
         "--trajectory-output-dir",
         type=str,
         default=None,
@@ -152,6 +179,12 @@ def main() -> None:
         logger.info(f"User sim (fixed): {models} via {args.usim_fixed_opponent_base_url}")
     else:
         logger.info("User sim: same SGLang model (no fixed opponent)")
+    if getattr(args, "usim_verbalized_sampling", False):
+        logger.info(
+            f"User sim: Verbalized Sampling enabled "
+            f"(n={getattr(args, 'usim_vs_num_samples', 5)}, "
+            f"method={getattr(args, 'usim_vs_method', 'prob')})"
+        )
     logger.info("=" * 60)
 
     # Start training

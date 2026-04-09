@@ -106,6 +106,9 @@ async def _p4g_generate_single(
         conversation_id = metadata.get("conversation_id", str(sample.index))
         raw_prefix = getattr(args, "p4g_persuadee_prompt_prefix", []) or []
         persuadee_prompt_prefix = " ".join(raw_prefix) if isinstance(raw_prefix, list) else (raw_prefix or "")
+        verbalized_sampling = bool(getattr(args, "usim_verbalized_sampling", False))
+        vs_num_samples = int(getattr(args, "usim_vs_num_samples", 5))
+        vs_method = str(getattr(args, "usim_vs_method", "prob"))
         env = P4gEnvironment(
             persuader_persona=persuader_persona,
             persuadee_persona=persuadee_persona,
@@ -116,6 +119,9 @@ async def _p4g_generate_single(
             persuadee_api_key=persuadee_api_key,
             conversation_id=conversation_id,
             persuadee_prompt_prefix=persuadee_prompt_prefix,
+            verbalized_sampling=verbalized_sampling,
+            vs_num_samples=vs_num_samples,
+            vs_method=vs_method,
         )
 
         sglang_url = (
