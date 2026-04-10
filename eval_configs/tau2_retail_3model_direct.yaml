@@ -1,0 +1,48 @@
+# tau2-bench retail evaluation — 3 models (direct API only, no OpenRouter)
+# Template: use envsubst to resolve ${PROJECT_ROOT} at runtime
+#   envsubst < eval_configs/tau2_retail_3model_direct.yaml > ${OUTPUT_DIR}/eval_config.yaml
+
+eval:
+  defaults:
+    n_samples_per_eval_prompt: 1
+    temperature: 0.7
+    top_p: 0.95
+    top_k: -1
+    max_response_len: 16384
+
+  datasets:
+    - name: tau2_retail_test_haiku
+      path: "usim://tau2/retail/test"
+      n_samples_per_eval_prompt: 4
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 8
+        usim_fixed_opponent_model: "claude-haiku-4-5-20251001"
+        usim_fixed_opponent_base_url: "https://api.anthropic.com"
+        usim_fixed_opponent_api_key_var: "ANTHROPIC_API_KEY"
+
+    - name: tau2_retail_test_gpt4o
+      path: "usim://tau2/retail/test"
+      n_samples_per_eval_prompt: 4
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 8
+        usim_fixed_opponent_model: "gpt-4o"
+        usim_fixed_opponent_base_url: "https://api.openai.com/v1"
+        usim_fixed_opponent_api_key_var: "OPENAI_API_KEY"
+
+    - name: tau2_retail_test_gpt5mini
+      path: "usim://tau2/retail/test"
+      n_samples_per_eval_prompt: 4
+      custom_generate_function_path: "usim.slime.rollout.usim_generate_rollout"
+      metadata_overrides:
+        domain: retail
+        task_split: test
+        max_tasks: 8
+        usim_fixed_opponent_model: "gpt-5-mini"
+        usim_fixed_opponent_base_url: "https://api.openai.com/v1"
+        usim_fixed_opponent_api_key_var: "OPENAI_API_KEY"
