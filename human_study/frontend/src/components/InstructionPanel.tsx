@@ -43,23 +43,51 @@ function normaliseScenario(raw: string): string {
     .split("\n")
     .map((line) => line.replace(/^\s+/, ""));
 
-  // Promote label-only lines to h4. A "label line" is one whose content is
-  // the label followed by a colon and nothing else -- these are the all-caps
-  // anchors that mark each section. Inline colons inside prose (e.g.
-  // "like `#W0000000`:") are left alone.
+  // Mark label-only lines (full content is "<label>:") so we know where each
+  // section starts. Everything else is body content. We defer emitting the
+  // h4 header until we know the section has non-empty content — tau2 often
+  // stores "." as a placeholder for empty sections, which we drop entirely.
   const labelSet = new Set(SECTION_LABELS.map((l) => l.toLowerCase()));
-  const promoted = lines.map((line) => {
+  type Entry = { kind: "label"; text: string } | { kind: "line"; text: string };
+  const entries: Entry[] = lines.map((line) => {
     const m = line.match(/^(.+?):\s*$/);
-    if (!m) return line;
-    const candidate = m[1].trim();
-    if (labelSet.has(candidate.toLowerCase())) {
-      // Leading blank so the h4 starts a fresh block.
-      return `\n#### ${candidate}`;
+    if (m) {
+      const candidate = m[1].trim();
+      if (labelSet.has(candidate.toLowerCase())) {
+        return { kind: "label", text: candidate };
+      }
     }
-    return line;
+    return { kind: "line", text: line };
   });
 
-  return promoted.join("\n");
+  // Walk through: for each label, peek ahead to the next label (or end) and
+  // decide whether any of the intervening lines carry real content. Real
+  // content = at least one non-empty line that isn't just a period.
+  const out: string[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (e.kind !== "label") {
+      out.push(e.text);
+      continue;
+    }
+    let j = i + 1;
+    let hasContent = false;
+    const body: string[] = [];
+    while (j < entries.length && entries[j].kind !== "label") {
+      const t = entries[j].text;
+      body.push(t);
+      const stripped = t.trim();
+      if (stripped && stripped !== ".") hasContent = true;
+      j++;
+    }
+    if (hasContent) {
+      out.push("", `#### ${e.text}`, ...body);
+    }
+    // Otherwise: skip both label and empty body entirely.
+    i = j - 1;
+  }
+
+  return out.join("\n");
 }
 
 export function InstructionPanel({ instruction, taskSplit, taskIdx, runtimeId }: Props) {
