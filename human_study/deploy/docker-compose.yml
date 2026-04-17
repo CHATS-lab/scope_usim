@@ -8,23 +8,22 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-usim_study}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-usim}"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
 
   backend:
     build:
-      context: ../backend
-      dockerfile: ../deploy/Dockerfile.backend
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
     restart: unless-stopped
     env_file:
       - ../backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-usim}:${POSTGRES_PASSWORD:-usim}@postgres:5432/${POSTGRES_DB:-usim_study}
+      FRONTEND_ORIGIN: ""
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,8 +32,8 @@ services:
 
   frontend:
     build:
-      context: ../frontend
-      dockerfile: ../deploy/Dockerfile.frontend
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_BACKEND_URL: http://backend:8000

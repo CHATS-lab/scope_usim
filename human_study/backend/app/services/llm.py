@@ -29,9 +29,13 @@ async def chat_once(
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
     }
+    # GPT-5.x and o-series use max_completion_tokens; older models use max_tokens.
+    if model.startswith(("gpt-5", "o1", "o3", "o4")):
+        kwargs["max_completion_tokens"] = max_tokens
+    else:
+        kwargs["temperature"] = temperature
+        kwargs["max_tokens"] = max_tokens
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"

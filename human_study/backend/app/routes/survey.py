@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import SessionStatus, StudySession, SurveyResponse
@@ -19,8 +19,10 @@ def submit_survey(
     if session.status == SessionStatus.SURVEY_DONE:
         raise HTTPException(409, "survey already submitted")
 
-    # Upsert response.
-    existing = db.get(SurveyResponse, req.session_id)  # unique by session_id
+    # Upsert response keyed by session_id (unique).
+    existing = db.exec(
+        select(SurveyResponse).where(SurveyResponse.session_id == session.id)
+    ).first()
     if existing is None:
         db.add(
             SurveyResponse(

@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, SQLModel
 
 
 def utcnow() -> datetime:
@@ -55,8 +55,6 @@ class StudySession(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
     ended_at: datetime | None = None
 
-    turns: list["Turn"] = Relationship(back_populates="session")
-
 
 class TurnRole(str, Enum):
     SYSTEM = "system"
@@ -79,8 +77,6 @@ class Turn(SQLModel, table=True):
     tool_call_id: str | None = None
     tool_name: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
-
-    session: StudySession | None = Relationship(back_populates="turns")
 
 
 class SurveyResponse(SQLModel, table=True):
