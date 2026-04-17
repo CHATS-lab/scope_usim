@@ -1,25 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, type ChatMessage, type SessionStartResponse, type SurveySchema } from "@/lib/api";
+import { withRetry } from "@/lib/retry";
 import { ChatPanel } from "@/components/ChatPanel";
 import { InstructionPanel } from "@/components/InstructionPanel";
 import { SurveyPanel } from "@/components/SurveyPanel";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { StopConfirm } from "@/components/StopConfirm";
+import type { SessionPhase } from "@/components/StatusPill";
 
 type Phase = "loading" | "error" | "chatting" | "surveying" | "done";
+
+const MAX_TURNS = 30;
 
 export default function StudyClient() {
   const params = useSearchParams();
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [transientError, setTransientError] = useState<string | null>(null);
   const [session, setSession] = useState<SessionStartResponse | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [awaiting, setAwaiting] = useState(false);
   const [surveySchema, setSurveySchema] = useState<SurveySchema | null>(null);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
 
+  // Start the session once URL params are read.
   useEffect(() => {
     const prolific_pid = params.get("PROLIFIC_PID") || params.get("prolific_pid");
     const study_id = params.get("STUDY_ID") || params.get("study_id");
@@ -34,59 +43,99 @@ export default function StudyClient() {
       return;
     }
 
-    api
-      .startSession({ prolific_pid, study_id, prolific_session_id, task_type })
+    withRetry(
+      () => api.startSession({ prolific_pid, study_id, prolific_session_id, task_type }),
+      { attempts: 3 }
+    )
       .then((s) => {
         setSession(s);
         setPhase("chatting");
       })
       .catch((err: unknown) => {
-        setErrorMsg(String(err));
+        setErrorMsg(describeError(err));
         setPhase("error");
       });
   }, [params]);
 
+  const turnCount = useMemo(
+    () => messages.filter((m) => m.role === "user").length,
+    [messages]
+  );
+
   const handleStop = useCallback(async () => {
     if (!session) return;
-    const res = await api.stop({ session_id: session.session_id });
-    setSurveySchema(res.survey_schema);
-    setPhase("surveying");
+    try {
+      const res = await withRetry(() => api.stop({ session_id: session.session_id }), {
+        attempts: 3,
+      });
+      setSurveySchema(res.survey_schema);
+      setPhase("surveying");
+    } catch (err) {
+      setTransientError(describeError(err));
+    }
   }, [session]);
 
-  const handleSend = useCallback(
+  const sendMessage = useCallback(
     async (text: string) => {
       if (!session) return;
-      if (text.trim() === "/stop") {
-        await handleStop();
+      const trimmed = text.trim();
+      if (trimmed === "/stop") {
+        setStopDialogOpen(true);
         return;
       }
-      setMessages((m) => [...m, { role: "user", content: text }]);
+
+      // Optimistic user bubble.
+      setMessages((m) => [...m, { role: "user", content: trimmed }]);
       setAwaiting(true);
+      setTransientError(null);
       try {
-        const reply = await api.chat({ session_id: session.session_id, user_message: text });
+        const reply = await withRetry(
+          () => api.chat({ session_id: session.session_id, user_message: trimmed }),
+          {
+            attempts: 3,
+            shouldRetry: (err) => {
+              // Don't retry on client errors (4xx other than 429).
+              const s = String(err);
+              return !/ 4\d\d /.test(s) || s.includes(" 429 ");
+            },
+          }
+        );
         setMessages((m) => [...m, ...reply.messages]);
       } catch (err) {
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", content: `[error: ${String(err)}]` },
-        ]);
+        // Roll back the optimistic user message and surface the error banner so
+        // the participant can retry.
+        setMessages((m) => {
+          const idx = [...m].reverse().findIndex((x) => x.role === "user");
+          if (idx === -1) return m;
+          const realIdx = m.length - 1 - idx;
+          return [...m.slice(0, realIdx), ...m.slice(realIdx + 1)];
+        });
+        setTransientError(describeError(err));
       } finally {
         setAwaiting(false);
       }
     },
-    [session, handleStop]
+    [session]
   );
 
   const handleSurveySubmit = useCallback(
     async (responses: Record<string, unknown>, free_text: string) => {
       if (!session) return;
-      const res = await api.survey({
-        session_id: session.session_id,
-        responses,
-        free_text: free_text || null,
-      });
-      setCompletionCode(res.completion_code);
-      setPhase("done");
+      try {
+        const res = await withRetry(
+          () =>
+            api.survey({
+              session_id: session.session_id,
+              responses,
+              free_text: free_text || null,
+            }),
+          { attempts: 3 }
+        );
+        setCompletionCode(res.completion_code);
+        setPhase("done");
+      } catch (err) {
+        setTransientError(describeError(err));
+      }
     },
     [session]
   );
@@ -114,6 +163,14 @@ export default function StudyClient() {
   if (phase === "surveying" && surveySchema) {
     return (
       <div className="min-h-screen bg-bg">
+        {transientError && (
+          <div className="mx-auto max-w-2xl px-6 pt-6">
+            <ErrorBanner
+              message={transientError}
+              onDismiss={() => setTransientError(null)}
+            />
+          </div>
+        )}
         <SurveyPanel schema={surveySchema} onSubmit={handleSurveySubmit} />
       </div>
     );
@@ -121,19 +178,54 @@ export default function StudyClient() {
 
   if (!session) return null;
 
+  const chatPhase: SessionPhase =
+    phase !== "chatting"
+      ? "stopped"
+      : transientError
+      ? "error"
+      : awaiting
+      ? "waiting"
+      : "chatting";
+
   return (
-    <div className="grid h-screen grid-cols-[1fr_1fr] bg-bg">
-      <ChatPanel
-        messages={messages}
-        onSend={handleSend}
-        disabled={phase !== "chatting"}
-        awaiting={awaiting}
-      />
-      <InstructionPanel
-        instruction={session.task_instruction}
-        taskSplit={session.task_split}
-        taskIdx={session.task_idx}
-        runtimeId={session.session_id}
+    <div className="grid h-screen min-h-0 grid-cols-1 bg-bg md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="relative flex h-full min-h-0 flex-col">
+        {transientError && (
+          <div className="border-b border-border bg-panel px-4 py-2">
+            <ErrorBanner
+              message={transientError}
+              onDismiss={() => setTransientError(null)}
+            />
+          </div>
+        )}
+        <ChatPanel
+          sessionId={session.session_id}
+          messages={messages}
+          onSend={sendMessage}
+          onRequestStop={() => setStopDialogOpen(true)}
+          disabled={phase !== "chatting"}
+          awaiting={awaiting}
+          turnCount={turnCount}
+          maxTurns={MAX_TURNS}
+        />
+      </div>
+      <div className="hidden h-full min-h-0 md:block">
+        <InstructionPanel
+          instruction={session.task_instruction}
+          taskSplit={session.task_split}
+          taskIdx={session.task_idx}
+          runtimeId={session.session_id}
+          phase={chatPhase}
+        />
+      </div>
+
+      <StopConfirm
+        open={stopDialogOpen}
+        onCancel={() => setStopDialogOpen(false)}
+        onConfirm={() => {
+          setStopDialogOpen(false);
+          void handleStop();
+        }}
       />
     </div>
   );
@@ -159,4 +251,9 @@ function CenterMessage({
       </div>
     </main>
   );
+}
+
+function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
