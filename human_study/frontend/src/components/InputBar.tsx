@@ -12,6 +12,9 @@ interface Props {
   onSubmit: () => void;
   onRequestStop?: () => void;
   disabled: boolean;
+  /** Distinguishes "agent is replying, wait" (awaiting=true) from "session
+   *  ended" (disabled without awaiting) so we can show the right placeholder. */
+  awaiting?: boolean;
   placeholder?: string;
 }
 
@@ -21,10 +24,16 @@ export function InputBar({
   onSubmit,
   onRequestStop,
   disabled,
+  awaiting = false,
   placeholder = "Ask anything",
 }: Props) {
   const isDesktop = useBreakpoint(768);
-  const canSend = !disabled && value.trim().length > 0;
+  const canSend = !disabled && !awaiting && value.trim().length > 0;
+  const effectivePlaceholder = awaiting
+    ? "Waiting for the agent to reply…"
+    : disabled
+    ? "Conversation ended."
+    : placeholder;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -55,9 +64,10 @@ export function InputBar({
           <TextareaAutosize
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={disabled ? "Conversation ended." : placeholder}
+            placeholder={effectivePlaceholder}
             aria-label="Your message"
-            disabled={disabled}
+            aria-busy={awaiting || undefined}
+            disabled={disabled || awaiting}
             minRows={1}
             maxRows={8}
             onKeyDown={(e) => {
@@ -66,7 +76,7 @@ export function InputBar({
                 if (canSend) onSubmit();
               }
             }}
-            className="flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-text outline-none placeholder:text-muted/70 disabled:opacity-60"
+            className="flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-text outline-none placeholder:text-muted/70 disabled:cursor-not-allowed disabled:opacity-60"
           />
 
           {onRequestStop && (

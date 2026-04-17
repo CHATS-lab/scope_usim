@@ -129,6 +129,7 @@ export function ChatPanel({
           onSubmit={handleSubmit}
           onRequestStop={onRequestStop}
           disabled={disabled}
+          awaiting={awaiting}
         />
       )}
     </div>
