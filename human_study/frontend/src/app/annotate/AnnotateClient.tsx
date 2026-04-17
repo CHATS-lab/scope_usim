@@ -68,19 +68,22 @@ export default function AnnotateClient() {
             }),
           { attempts: 3 }
         );
-        if (!res.next_available) {
+        // Pinned-session flow: always stop after this one so the annotator
+        // doesn't loop on the same session (the URL pin would just re-serve
+        // it). Normal queue flow: advance to next or finish.
+        if (pinned_session || !res.next_available) {
           setCompletionCode(res.completion_code);
           setPhase("done_all");
-        } else {
-          setPhase("loading");
-          setNext(null);
-          await loadNext();
+          return;
         }
+        setPhase("loading");
+        setNext(null);
+        await loadNext();
       } catch (err) {
         setTransientError(err instanceof Error ? err.message : String(err));
       }
     },
-    [annotator_id, next, loadNext]
+    [annotator_id, next, loadNext, pinned_session]
   );
 
   if (phase === "loading") {
