@@ -10,13 +10,24 @@ interface Props {
 }
 
 /**
- * Normalise tau2-bench's tab-indented scenario text into clean markdown so
- * section headers ("Instruction:", "Rules:", "Finish the Task:") render as
- * bold lines with proper spacing, matching the Sim2Real screenshot.
+ * Normalise tau2-bench's tab-indented scenario text into clean markdown.
+ *
+ * tau2 stores instructions with literal tabs for visual nesting (e.g.
+ * "\t\tReason for call:\n\t\t\tYou want to..."). In markdown, 4+ leading
+ * spaces means "code block", so the naive conversion rendered the whole
+ * scenario as a grey code block. We strip leading whitespace on every line
+ * and let the bolded section labels carry the hierarchy.
  */
 function normaliseScenario(raw: string): string {
-  let txt = raw.replace(/\r\n?/g, "\n").replace(/\t/g, "  ");
-  // Bold the common top-level labels when they appear on their own line.
+  let txt = raw.replace(/\r\n?/g, "\n").replace(/\t/g, " ");
+  // Kill leading whitespace on every line so markdown never treats indentation
+  // as a code block. Preserves bullets that start with "- " because we strip
+  // BEFORE the hyphen.
+  txt = txt
+    .split("\n")
+    .map((line) => line.replace(/^\s+/, ""))
+    .join("\n");
+
   const boldLabels = [
     "Instruction:",
     "Instructions:",
@@ -34,13 +45,12 @@ function normaliseScenario(raw: string): string {
     "Domain:",
   ];
   for (const label of boldLabels) {
-    // Match label at start of line (possibly after spaces) -- bold it by prefixing **...**
-    const re = new RegExp(`^(\\s*)(${label.replace(":", ":")})`, "gm");
-    txt = txt.replace(re, (_m, pre, lab) => `${pre}**${lab}**`);
+    const re = new RegExp(`^(${label.replace(/:/, ":")})`, "gm");
+    txt = txt.replace(re, (_m, lab) => `**${lab}**`);
   }
-  // Turn leading "- " hyphens into proper markdown bullets (they already are,
-  // but ensure there's a blank line before the first bullet for GFM lists).
-  txt = txt.replace(/(^|\n)(\S[^\n]*:?)\n(- )/g, (_m, l, line, bullet) => `${l}${line}\n\n${bullet}`);
+  // Ensure a blank line sits between a label line and the first bullet so
+  // markdown-gfm renders a proper <ul>, not an inline run.
+  txt = txt.replace(/(^|\n)([^\n]*:\*\*)\n(- )/g, (_m, l, line, bullet) => `${l}${line}\n\n${bullet}`);
   return txt;
 }
 
