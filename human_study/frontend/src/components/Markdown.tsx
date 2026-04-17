@@ -9,10 +9,7 @@ import { cn } from "@/lib/cn";
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <ReactMarkdown
-      className={cn(
-        "prose-usim prose-invert max-w-none text-sm leading-relaxed",
-        className
-      )}
+      className={cn("max-w-none", className)}
       remarkPlugins={[remarkGfm, remarkBreaks]}
       components={{
         code({ inline, className, children, ...props }: any) {
@@ -43,13 +40,28 @@ export function Markdown({ children, className }: { children: string; className?
           );
         },
         ul({ children }) {
-          return <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>;
+          return <ul className="my-3 list-disc space-y-1.5 pl-5">{children}</ul>;
         },
         ol({ children }) {
-          return <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>;
+          return <ol className="my-3 list-decimal space-y-1.5 pl-5">{children}</ol>;
+        },
+        li({ children }) {
+          return <li className="[&>p]:my-0">{children}</li>;
         },
         p({ children }) {
           return <p className="my-2 first:mt-0 last:mb-0">{children}</p>;
+        },
+        strong({ children }) {
+          return <strong className="font-semibold text-text">{children}</strong>;
+        },
+        h1({ children }) {
+          return <h1 className="mt-4 text-lg font-semibold text-text">{children}</h1>;
+        },
+        h2({ children }) {
+          return <h2 className="mt-4 text-base font-semibold text-text">{children}</h2>;
+        },
+        h3({ children }) {
+          return <h3 className="mt-3 text-sm font-semibold text-text">{children}</h3>;
         },
         blockquote({ children }) {
           return (
@@ -57,6 +69,9 @@ export function Markdown({ children, className }: { children: string; className?
               {children}
             </blockquote>
           );
+        },
+        hr() {
+          return <hr className="my-4 border-border" />;
         },
         table({ children }) {
           return (

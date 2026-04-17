@@ -9,13 +9,15 @@ import {
   type SessionStartResponse,
   type SurveySchema,
 } from "@/lib/api";
-import { postSSE } from "@/lib/sse";
 import { withRetry } from "@/lib/retry";
+import { useStreamingChat } from "@/hooks/useStreamingChat";
 import { ChatPanel } from "@/components/ChatPanel";
 import { InstructionPanel } from "@/components/InstructionPanel";
 import { SurveyPanel } from "@/components/SurveyPanel";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { StopConfirm } from "@/components/StopConfirm";
+import { Sidebar } from "@/components/Sidebar";
+import { TopBar } from "@/components/TopBar";
 import type { SessionPhase } from "@/components/StatusPill";
 
 type Phase = "loading" | "error" | "chatting" | "surveying" | "done";
@@ -30,10 +32,12 @@ export default function StudyClient() {
   const [transientError, setTransientError] = useState<string | null>(null);
   const [session, setSession] = useState<SessionStartResponse | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [awaiting, setAwaiting] = useState(false);
   const [surveySchema, setSurveySchema] = useState<SurveySchema | null>(null);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(true);
+
+  const { send: streamChat, awaiting } = useStreamingChat(setMessages);
 
   useEffect(() => {
     const prolific_pid = params.get("PROLIFIC_PID") || params.get("prolific_pid");
@@ -89,130 +93,14 @@ export default function StudyClient() {
         setStopDialogOpen(true);
         return;
       }
-
-      // Optimistic user bubble + placeholder assistant we stream into.
-      setMessages((m) => [
-        ...m,
-        { role: "user", content: trimmed },
-        { role: "assistant", content: "" },
-      ]);
-      setAwaiting(true);
-      setTransientError(null);
-
-      // Index of the assistant placeholder we're currently streaming into.
-      // We may create more assistant messages later if the model emits
-      // multiple passes (tool-call loop).
-      let activeAssistantIdx: number | null = null;
-      const seenToolCalls: Record<string, boolean> = {};
-
-      function ensureActiveAssistant(): number {
-        if (activeAssistantIdx !== null) return activeAssistantIdx;
-        let newIdx = -1;
-        setMessages((m) => {
-          newIdx = m.length;
-          return [...m, { role: "assistant", content: "" }];
-        });
-        activeAssistantIdx = newIdx;
-        return newIdx;
-      }
-
-      try {
-        await postSSE(
-          CHAT_STREAM_URL,
-          { session_id: session.session_id, user_message: trimmed },
-          async (event, data: any) => {
-            switch (event) {
-              case "assistant_start": {
-                if (activeAssistantIdx === null) {
-                  // The initial placeholder we pushed above is the current one.
-                  activeAssistantIdx = -1;
-                  setMessages((m) => {
-                    activeAssistantIdx = m.length - 1;
-                    return m;
-                  });
-                } else {
-                  ensureActiveAssistant();
-                }
-                break;
-              }
-              case "assistant_delta": {
-                const delta = String(data?.content ?? "");
-                if (!delta) break;
-                const idx = activeAssistantIdx ?? ensureActiveAssistant();
-                setMessages((m) => {
-                  const next = [...m];
-                  const cur = next[idx];
-                  if (cur && cur.role === "assistant") {
-                    next[idx] = { ...cur, content: (cur.content ?? "") + delta };
-                  }
-                  return next;
-                });
-                break;
-              }
-              case "assistant_end": {
-                const idx = activeAssistantIdx;
-                if (idx !== null) {
-                  setMessages((m) => {
-                    const next = [...m];
-                    const cur = next[idx];
-                    if (cur && cur.role === "assistant") {
-                      next[idx] = {
-                        ...cur,
-                        content: data?.content ?? cur.content,
-                        tool_calls: data?.tool_calls ?? null,
-                      };
-                    }
-                    return next;
-                  });
-                }
-                activeAssistantIdx = null;
-                break;
-              }
-              case "tool_start": {
-                // nothing to render yet; card shows pending once assistant_end
-                // landed the tool_calls array.
-                break;
-              }
-              case "tool_end": {
-                const tcId: string = data?.tool_call_id;
-                if (!tcId || seenToolCalls[tcId]) break;
-                seenToolCalls[tcId] = true;
-                setMessages((m) => [
-                  ...m,
-                  {
-                    role: "tool",
-                    content: JSON.stringify(data.result, null, 0),
-                    tool_call_id: tcId,
-                    tool_name: data?.name ?? null,
-                  },
-                ]);
-                break;
-              }
-              case "error": {
-                setTransientError(String(data?.message ?? "stream error"));
-                break;
-              }
-              case "done": {
-                break;
-              }
-            }
-          }
-        );
-      } catch (err) {
-        setTransientError(describeError(err));
-        // Clean up the empty placeholder if it received nothing.
-        setMessages((m) => {
-          const last = m[m.length - 1];
-          if (last && last.role === "assistant" && !last.content && !last.tool_calls) {
-            return m.slice(0, -1);
-          }
-          return m;
-        });
-      } finally {
-        setAwaiting(false);
-      }
+      await streamChat({
+        sessionId: session.session_id,
+        url: CHAT_STREAM_URL,
+        userMessage: trimmed,
+        onError: (msg) => setTransientError(msg),
+      });
     },
-    [session]
+    [session, streamChat]
   );
 
   const handleSurveySubmit = useCallback(
@@ -237,7 +125,7 @@ export default function StudyClient() {
     [session]
   );
 
-  if (phase === "loading") return <CenterMessage>Loading session...</CenterMessage>;
+  if (phase === "loading") return <CenterMessage>Loading session…</CenterMessage>;
   if (phase === "error") return <CenterMessage variant="error">{errorMsg}</CenterMessage>;
 
   if (phase === "done" && completionCode) {
@@ -285,8 +173,23 @@ export default function StudyClient() {
       : "chatting";
 
   return (
-    <div className="grid h-screen min-h-0 grid-cols-1 bg-bg md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid h-screen min-h-0 grid-cols-[auto_minmax(0,1fr)] bg-bg md:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
+      <Sidebar
+        taskType={session.task_type}
+        taskSplit={session.task_split}
+        taskIdx={session.task_idx}
+        condition={session.condition}
+      />
+
       <div className="relative flex h-full min-h-0 flex-col">
+        <TopBar
+          phase={chatPhase}
+          turnCount={turnCount}
+          maxTurns={MAX_TURNS}
+          onToggleInstructions={() => setInstructionsOpen((v) => !v)}
+          instructionsOpen={instructionsOpen}
+        />
+
         {transientError && (
           <div className="border-b border-border bg-panel px-4 py-2">
             <ErrorBanner
@@ -295,6 +198,7 @@ export default function StudyClient() {
             />
           </div>
         )}
+
         <ChatPanel
           sessionId={session.session_id}
           messages={messages}
@@ -302,19 +206,19 @@ export default function StudyClient() {
           onRequestStop={() => setStopDialogOpen(true)}
           disabled={phase !== "chatting"}
           awaiting={awaiting}
-          turnCount={turnCount}
-          maxTurns={MAX_TURNS}
         />
       </div>
-      <div className="hidden h-full min-h-0 md:block">
-        <InstructionPanel
-          instruction={session.task_instruction}
-          taskSplit={session.task_split}
-          taskIdx={session.task_idx}
-          runtimeId={session.session_id}
-          phase={chatPhase}
-        />
-      </div>
+
+      {instructionsOpen && (
+        <div className="hidden h-full min-h-0 md:block">
+          <InstructionPanel
+            instruction={session.task_instruction}
+            taskSplit={session.task_split}
+            taskIdx={session.task_idx}
+            runtimeId={session.session_id}
+          />
+        </div>
+      )}
 
       <StopConfirm
         open={stopDialogOpen}
