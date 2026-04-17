@@ -37,6 +37,9 @@ def compute_task_outcome(
     return _tau2_outcome(db, session)
 
 
+P4G_MAX_DONATION = 2.0  # The P4G study caps the donation ask at $2.
+
+
 def _p4g_outcome(responses: dict[str, Any]) -> TaskOutcome:
     amount = responses.get("intended_donation")
     try:
@@ -49,18 +52,34 @@ def _p4g_outcome(responses: dict[str, Any]) -> TaskOutcome:
             label="Persuasion outcome",
             detail="No intended donation amount was recorded in the survey.",
         )
+    amt = max(0.0, min(P4G_MAX_DONATION, amt))
+    frac = amt / P4G_MAX_DONATION  # 0.0 – 1.0
     if amt <= 0:
         return TaskOutcome(
             status="failure",
-            label="No donation",
-            detail="You indicated you would not donate. The agent did not succeed in persuading you.",
+            label=f"No donation ($0.00 of ${P4G_MAX_DONATION:.2f})",
+            detail=(
+                "You indicated you would donate $0.00 of the $2.00 maximum. "
+                "The agent did not succeed in persuading you to contribute."
+            ),
         )
-    status = "success" if amt >= 1.0 else "partial"
-    label = "Successful persuasion" if amt >= 1.0 else "Partial persuasion"
+    if frac >= 1.0:
+        return TaskOutcome(
+            status="success",
+            label=f"Full donation (${amt:.2f} of ${P4G_MAX_DONATION:.2f})",
+            detail=(
+                f"You indicated you would donate ${amt:.2f} out of the "
+                f"${P4G_MAX_DONATION:.2f} maximum — the agent fully succeeded "
+                "in persuading you."
+            ),
+        )
     return TaskOutcome(
-        status=status,
-        label=label,
-        detail=f"You indicated you would donate ${amt:.2f}.",
+        status="partial",
+        label=f"Partial donation (${amt:.2f} of ${P4G_MAX_DONATION:.2f})",
+        detail=(
+            f"You indicated you would donate ${amt:.2f} out of the "
+            f"${P4G_MAX_DONATION:.2f} maximum — the agent partially persuaded you."
+        ),
     )
 
 
@@ -94,22 +113,34 @@ def _tau2_outcome(db: Session, session: StudySession) -> TaskOutcome:
     result = evaluate_completed_session(split=split, task_id=task_id, turns=api_messages)
 
     reward = result.get("reward", 0.0)
+    score_str = f"{reward:.2f} of 1.00"
+    breakdown: dict[str, Any] = result.get("breakdown") or {}
+    # Summarise which evaluator components passed (env actions, nl assertions, etc.)
+    # in one line that participants can read without training on the evaluator.
+    parts = [
+        f"{_friendly_breakdown_key(k)}: {v:.2f}"
+        for k, v in breakdown.items()
+        if isinstance(v, (int, float))
+    ]
+    breakdown_line = (
+        " · ".join(parts) if parts else "Details from the automatic evaluator are not available."
+    )
     if result.get("success"):
         return TaskOutcome(
             status="success",
-            label="Task completed successfully",
+            label=f"Task completed successfully (score {score_str})",
             detail=(
                 "The agent met all of the task's success criteria based on "
-                "automatic evaluation against the task specification."
+                f"automatic evaluation. {breakdown_line}"
             ),
         )
     if reward > 0:
         return TaskOutcome(
             status="partial",
-            label="Task partially completed",
+            label=f"Task partially completed (score {score_str})",
             detail=(
-                f"Automatic evaluation scored the session {reward:.2f}/1.00. "
-                "Some success criteria were met, but not all."
+                f"Automatic evaluation scored the session {score_str}. "
+                f"{breakdown_line}"
             ),
         )
     if result.get("reason"):
@@ -117,15 +148,25 @@ def _tau2_outcome(db: Session, session: StudySession) -> TaskOutcome:
             status="not_evaluated",
             label="Outcome not available",
             detail=(
-                "We weren't able to automatically evaluate this session. "
-                "Your responses still count toward the study."
+                "We weren't able to automatically evaluate this session. Your "
+                "responses still count toward the study."
             ),
         )
     return TaskOutcome(
         status="failure",
-        label="Task not completed",
+        label=f"Task not completed (score {score_str})",
         detail=(
             "Automatic evaluation did not detect that the agent completed the "
-            "task's success criteria. This is still useful data for the study."
+            f"task's success criteria. {breakdown_line}"
         ),
     )
+
+
+def _friendly_breakdown_key(key: str) -> str:
+    mapping = {
+        "ENV": "Environment actions",
+        "COMMUNICATE": "Information conveyed",
+        "NL_ASSERTION": "Dialogue checks",
+        "ACTION": "Expected actions",
+    }
+    return mapping.get(key.upper(), key.replace("_", " ").title())

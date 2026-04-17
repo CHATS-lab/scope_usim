@@ -164,7 +164,7 @@ def evaluate_completed_session(
     for m in turns:
         role = m.get("role")
         if role == "user":
-            tau2_msgs.append(UserMessage(content=m.get("content")))
+            tau2_msgs.append(UserMessage(role="user", content=m.get("content")))
         elif role == "assistant":
             tool_calls = None
             if m.get("tool_calls"):
@@ -180,11 +180,16 @@ def evaluate_completed_session(
                         )
                     )
             tau2_msgs.append(
-                AssistantMessage(content=m.get("content"), tool_calls=tool_calls)
+                AssistantMessage(
+                    role="assistant",
+                    content=m.get("content"),
+                    tool_calls=tool_calls,
+                )
             )
         elif role == "tool":
             tau2_msgs.append(
                 Tau2ToolMessage(
+                    role="tool",
                     id=m.get("tool_call_id", ""),
                     content=m.get("content"),
                     requestor="assistant",
