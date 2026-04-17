@@ -51,27 +51,30 @@ def submit_survey(
     session = db.get(StudySession, req.session_id)
     if session is None:
         raise HTTPException(404, "session not found")
-    if session.status == SessionStatus.SURVEY_DONE:
-        raise HTTPException(409, "survey already submitted")
 
-    # Upsert response keyed by session_id (unique).
     existing = db.exec(
         select(SurveyResponse).where(SurveyResponse.session_id == session.id)
     ).first()
-    if existing is None:
-        db.add(
-            SurveyResponse(
-                session_id=session.id,
-                responses=req.responses,
-                free_text=req.free_text,
-            )
-        )
 
-    code = generate_completion_code(str(session.id))
-    session.status = SessionStatus.SURVEY_DONE
-    session.completion_code = code
-    db.add(session)
-    db.commit()
+    # Idempotent: if the participant's client retries the POST (slow network,
+    # timeout-then-success), we return the same code + debrief instead of 409.
+    # The first successful write owns the canonical responses; replays are no-ops.
+    if session.status == SessionStatus.SURVEY_DONE and existing is not None:
+        code = session.completion_code or generate_completion_code(str(session.id))
+    else:
+        if existing is None:
+            db.add(
+                SurveyResponse(
+                    session_id=session.id,
+                    responses=req.responses,
+                    free_text=req.free_text,
+                )
+            )
+        code = generate_completion_code(str(session.id))
+        session.status = SessionStatus.SURVEY_DONE
+        session.completion_code = code
+        db.add(session)
+        db.commit()
 
     turn_count = db.exec(
         select(func.count(Turn.id)).where(
