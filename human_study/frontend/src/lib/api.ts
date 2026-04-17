@@ -59,7 +59,18 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const raw = await res.text();
+    // FastAPI HTTPException returns {detail: "..."} — surface that directly
+    // instead of "HTTP 409 {detail: ...}" noise.
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.detail === "string") throw new Error(parsed.detail);
+    } catch (e) {
+      if (e instanceof Error && e.message && e.message !== raw) throw e;
+    }
+    throw new Error(raw || `Request failed (${res.status})`);
+  }
   return (await res.json()) as T;
 }
 

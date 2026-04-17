@@ -154,8 +154,11 @@ export default function StudyClient() {
 
   if (!session) return null;
 
+  const turnLimitHit = turnCount >= MAX_TURNS;
   const chatPhase: SessionPhase =
     phase !== "chatting"
+      ? "stopped"
+      : turnLimitHit
       ? "stopped"
       : transientError
       ? "error"

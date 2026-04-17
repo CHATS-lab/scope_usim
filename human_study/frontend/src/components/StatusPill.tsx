@@ -26,7 +26,7 @@ const STYLES: Record<SessionPhase, { label: string; dot: string; wrap: string }>
     wrap: "text-muted bg-muted/10 border-muted/30",
   },
   error: {
-    label: "Connection issue",
+    label: "Error",
     dot: "bg-red-400 animate-pulse",
     wrap: "text-red-200 bg-red-400/10 border-red-400/40",
   },

@@ -101,8 +101,15 @@ async def post_chat(
     turns = db.exec(
         select(Turn).where(Turn.session_id == session.id).order_by(Turn.turn_idx)
     ).all()
-    if len(turns) >= settings.max_turns:
-        raise HTTPException(409, "turn limit reached")
+    # Limit is on *user turns* only. Agent and tool turns are bookkeeping that
+    # doesn't map to what the participant sees, so counting them here would
+    # reject well under 30 user messages on tool-heavy (tau2) sessions.
+    user_turns = sum(1 for t in turns if t.role == TurnRole.USER)
+    if user_turns >= settings.max_turns:
+        raise HTTPException(
+            409,
+            "You've reached the maximum number of turns for this task. Please end the conversation with /stop to continue to the survey.",
+        )
     next_idx = turns[-1].turn_idx + 1 if turns else 0
 
     user_turn = Turn(
@@ -209,8 +216,18 @@ async def _stream_chat(req: ChatRequest) -> AsyncIterator[bytes]:
         turns = db.exec(
             select(Turn).where(Turn.session_id == session.id).order_by(Turn.turn_idx)
         ).all()
-        if len(turns) >= settings.max_turns:
-            yield _sse("error", {"message": "turn limit reached"})
+        user_turns = sum(1 for t in turns if t.role == TurnRole.USER)
+        if user_turns >= settings.max_turns:
+            yield _sse(
+                "error",
+                {
+                    "message": (
+                        "You've reached the maximum number of turns for this task. "
+                        "Please end the conversation with /stop to continue to the "
+                        "survey."
+                    )
+                },
+            )
             return
         next_idx = turns[-1].turn_idx + 1 if turns else 0
 
