@@ -171,11 +171,19 @@ def evaluate_completed_session(
                 tool_calls = []
                 for tc in m["tool_calls"]:
                     fn = tc.get("function") or {}
+                    raw_args = fn.get("arguments") or tc.get("arguments") or {}
+                    # OpenAI stores arguments as a JSON-encoded string; tau2
+                    # expects a dict.
+                    if isinstance(raw_args, str):
+                        try:
+                            raw_args = json.loads(raw_args) if raw_args else {}
+                        except json.JSONDecodeError:
+                            raw_args = {}
                     tool_calls.append(
                         Tau2ToolCall(
                             id=tc.get("id", ""),
                             name=fn.get("name") or tc.get("name", ""),
-                            arguments=fn.get("arguments") or tc.get("arguments") or {},
+                            arguments=raw_args if isinstance(raw_args, dict) else {},
                             requestor="assistant",
                         )
                     )

@@ -145,6 +145,24 @@ export interface AnnotationNextResponse {
 export interface AnnotationSubmitResponse {
   completion_code: string | null;
   next_available: boolean;
+  debrief: AnnotatorDebrief | null;
+}
+
+export interface AnnotatorDebrief {
+  annotator_id: string;
+  total_annotated: number;
+  session_summary: AnnotatedSessionSummary | null;
+}
+
+export interface AnnotatedSessionSummary {
+  session_id: string;
+  task_type: TaskType;
+  task_split: string;
+  task_idx: number;
+  turn_count: number;
+  condition: Condition;
+  condition_label: string;
+  participant_outcome: TaskOutcome;
 }
 
 export interface DebriefInfo {

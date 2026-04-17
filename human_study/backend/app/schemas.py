@@ -99,6 +99,29 @@ class AnnotationSubmitRequest(BaseModel):
 class AnnotationSubmitResponse(BaseModel):
     completion_code: str | None = None
     next_available: bool
+    # Populated on the final submission (pinned session, or queue drained) so
+    # the annotator sees a real disclosure instead of a bare "thanks" page.
+    debrief: "AnnotatorDebrief | None" = None
+
+
+class AnnotatorDebrief(BaseModel):
+    annotator_id: str
+    total_annotated: int
+    session_summary: "AnnotatedSessionSummary | None" = None
+
+
+class AnnotatedSessionSummary(BaseModel):
+    """Details about the session this annotator just rated (for pinned flow).
+    On the queue-drained path we don't attach one since the annotator may
+    have rated many in a row."""
+    session_id: UUID
+    task_type: TaskType
+    task_split: str
+    task_idx: int
+    turn_count: int
+    condition: Condition
+    condition_label: str
+    participant_outcome: "TaskOutcome"
 
 
 class DebriefInfo(BaseModel):

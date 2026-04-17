@@ -19,6 +19,7 @@ from sqlmodel import Session, func, select
 from ..db import get_session
 from ..models import (
     Annotation,
+    Condition,
     SessionStatus,
     StudySession,
     Turn,
@@ -28,9 +29,19 @@ from ..schemas import (
     AnnotationNextResponse,
     AnnotationSubmitRequest,
     AnnotationSubmitResponse,
+    AnnotatedSessionSummary,
+    AnnotatorDebrief,
     ChatMessage,
 )
 from ..services.conditions import generate_completion_code
+from ..services.outcome import compute_task_outcome
+
+
+_CONDITION_LABELS: dict[Condition, str] = {
+    Condition.BASE: "Base model (no RL training)",
+    Condition.RL_SINGLE: "RL-Single: trained against a single simulated user",
+    Condition.COTRAINING: "Co-training: agent and user simulator co-evolved",
+}
 
 router = APIRouter(prefix="/annotation", tags=["annotation"])
 
@@ -227,6 +238,43 @@ def submit_annotation(
     nxt = get_next_session(annotator_id=req.annotator_id, db=db)
     next_available = not nxt.done
 
+    # Count how many sessions this annotator has now rated in total.
+    total_annotated = int(
+        db.exec(
+            select(func.count(Annotation.id)).where(
+                Annotation.annotator_id == req.annotator_id
+            )
+        ).one()
+        or 0
+    )
+
+    # Build a per-session summary so the annotator can see what they just
+    # rated (condition, task outcome, etc.). Keeps the debrief substantive
+    # rather than a bare "thanks".
+    summary = AnnotatedSessionSummary(
+        session_id=session.id,
+        task_type=session.task_type,
+        task_split=session.task_split,
+        task_idx=session.task_idx,
+        turn_count=int(
+            db.exec(
+                select(func.count(Turn.id)).where(
+                    Turn.session_id == session.id, Turn.role == TurnRole.USER
+                )
+            ).one()
+            or 0
+        ),
+        condition=session.condition,
+        condition_label=_CONDITION_LABELS[session.condition],
+        participant_outcome=compute_task_outcome(db, session),
+    )
+
+    debrief = AnnotatorDebrief(
+        annotator_id=req.annotator_id,
+        total_annotated=total_annotated,
+        session_summary=summary,
+    )
+
     return AnnotationSubmitResponse(
         completion_code=(
             generate_completion_code(f"ann:{req.annotator_id}")
@@ -234,4 +282,5 @@ def submit_annotation(
             else None
         ),
         next_available=next_available,
+        debrief=debrief,
     )
