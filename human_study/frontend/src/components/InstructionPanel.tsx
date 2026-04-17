@@ -10,48 +10,56 @@ interface Props {
 }
 
 /**
+ * Labels tau2 uses in its user_scenario text. We promote each to an h4 so the
+ * Markdown component styles them as section headings (mt-4 mb-2 text-base
+ * font-semibold, per OpenHands' heading scale).
+ */
+const SECTION_LABELS = [
+  "Instruction",
+  "Instructions",
+  "You may start with",
+  "Rules",
+  "Finish the Task",
+  "Finish the task",
+  "Reason for call",
+  "Known info",
+  "Unknown info",
+  "Task instructions",
+  "Domain",
+];
+
+/**
  * Normalise tau2-bench's tab-indented scenario text into clean markdown.
  *
- * tau2 stores instructions with literal tabs for visual nesting (e.g.
- * "\t\tReason for call:\n\t\t\tYou want to..."). In markdown, 4+ leading
- * spaces means "code block", so the naive conversion rendered the whole
- * scenario as a grey code block. We strip leading whitespace on every line
- * and let the bolded section labels carry the hierarchy.
+ * tau2 stores instructions with literal tabs for visual nesting. In markdown
+ * 4+ leading spaces means "code block", so a naive conversion would render
+ * the whole scenario as a grey monospace block. We strip leading whitespace
+ * on every line and promote known labels to h4 headings.
  */
 function normaliseScenario(raw: string): string {
-  let txt = raw.replace(/\r\n?/g, "\n").replace(/\t/g, " ");
-  // Kill leading whitespace on every line so markdown never treats indentation
-  // as a code block. Preserves bullets that start with "- " because we strip
-  // BEFORE the hyphen.
-  txt = txt
+  const lines = raw
+    .replace(/\r\n?/g, "\n")
+    .replace(/\t/g, " ")
     .split("\n")
-    .map((line) => line.replace(/^\s+/, ""))
-    .join("\n");
+    .map((line) => line.replace(/^\s+/, ""));
 
-  const boldLabels = [
-    "Instruction:",
-    "Instructions:",
-    "You may start with:",
-    "Rules:",
-    "Finish the Task:",
-    "Finish the task:",
-    "Task split:",
-    "Task index:",
-    "Runtime:",
-    "Reason for call:",
-    "Known info:",
-    "Unknown info:",
-    "Task instructions:",
-    "Domain:",
-  ];
-  for (const label of boldLabels) {
-    const re = new RegExp(`^(${label.replace(/:/, ":")})`, "gm");
-    txt = txt.replace(re, (_m, lab) => `**${lab}**`);
-  }
-  // Ensure a blank line sits between a label line and the first bullet so
-  // markdown-gfm renders a proper <ul>, not an inline run.
-  txt = txt.replace(/(^|\n)([^\n]*:\*\*)\n(- )/g, (_m, l, line, bullet) => `${l}${line}\n\n${bullet}`);
-  return txt;
+  // Promote label-only lines to h4. A "label line" is one whose content is
+  // the label followed by a colon and nothing else -- these are the all-caps
+  // anchors that mark each section. Inline colons inside prose (e.g.
+  // "like `#W0000000`:") are left alone.
+  const labelSet = new Set(SECTION_LABELS.map((l) => l.toLowerCase()));
+  const promoted = lines.map((line) => {
+    const m = line.match(/^(.+?):\s*$/);
+    if (!m) return line;
+    const candidate = m[1].trim();
+    if (labelSet.has(candidate.toLowerCase())) {
+      // Leading blank so the h4 starts a fresh block.
+      return `\n#### ${candidate}`;
+    }
+    return line;
+  });
+
+  return promoted.join("\n");
 }
 
 export function InstructionPanel({ instruction, taskSplit, taskIdx, runtimeId }: Props) {
@@ -74,7 +82,7 @@ export function InstructionPanel({ instruction, taskSplit, taskIdx, runtimeId }:
       </header>
 
       <div className="flex-1 px-6 py-6">
-        <article className="mx-auto max-w-xl space-y-2 text-[13px] leading-7">
+        <article className="mx-auto max-w-xl text-text">
           <Markdown>{body}</Markdown>
         </article>
       </div>
