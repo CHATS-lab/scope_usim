@@ -80,7 +80,23 @@ export const api = {
     session_id: string;
     responses: Record<string, unknown>;
     free_text?: string | null;
-  }) => post<{ completion_code: string }>("/survey", p),
+  }) => post<SurveyCompleteResponse>("/survey", p),
 };
+
+export interface DebriefInfo {
+  condition: Condition;
+  condition_label: string;
+  condition_description: string;
+  task_type: TaskType;
+  task_split: string;
+  task_idx: number;
+  turn_count: number;
+  completed: boolean;
+}
+
+export interface SurveyCompleteResponse {
+  completion_code: string;
+  debrief: DebriefInfo;
+}
 
 export const CHAT_STREAM_URL = `${BASE}/chat/stream`;

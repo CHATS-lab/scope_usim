@@ -6,6 +6,7 @@ import {
   api,
   CHAT_STREAM_URL,
   type ChatMessage,
+  type DebriefInfo,
   type SessionStartResponse,
   type SurveySchema,
 } from "@/lib/api";
@@ -18,6 +19,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { StopConfirm } from "@/components/StopConfirm";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
+import { DebriefPanel } from "@/components/DebriefPanel";
 import type { SessionPhase } from "@/components/StatusPill";
 
 type Phase = "loading" | "error" | "chatting" | "surveying" | "done";
@@ -34,6 +36,7 @@ export default function StudyClient() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [surveySchema, setSurveySchema] = useState<SurveySchema | null>(null);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
+  const [debrief, setDebrief] = useState<DebriefInfo | null>(null);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const [instructionsOpen, setInstructionsOpen] = useState(true);
 
@@ -117,6 +120,7 @@ export default function StudyClient() {
           { attempts: 3 }
         );
         setCompletionCode(res.completion_code);
+        setDebrief(res.debrief);
         setPhase("done");
       } catch (err) {
         setTransientError(describeError(err));
@@ -128,21 +132,8 @@ export default function StudyClient() {
   if (phase === "loading") return <CenterMessage>Loading session…</CenterMessage>;
   if (phase === "error") return <CenterMessage variant="error">{errorMsg}</CenterMessage>;
 
-  if (phase === "done" && completionCode) {
-    return (
-      <CenterMessage>
-        <div className="space-y-3 text-center">
-          <h2 className="text-xl font-semibold text-text">Thank you for participating!</h2>
-          <p className="text-muted">Your completion code is:</p>
-          <code className="inline-block rounded bg-panelAlt px-3 py-2 font-mono text-lg text-text">
-            {completionCode}
-          </code>
-          <p className="text-sm text-muted">
-            Paste this code into the Prolific form to mark the task as completed.
-          </p>
-        </div>
-      </CenterMessage>
-    );
+  if (phase === "done" && completionCode && debrief) {
+    return <DebriefPanel completionCode={completionCode} debrief={debrief} />;
   }
 
   if (phase === "surveying" && surveySchema) {

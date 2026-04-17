@@ -61,3 +61,18 @@ class SurveySubmitRequest(BaseModel):
 
 class SurveySubmitResponse(BaseModel):
     completion_code: str
+    debrief: "DebriefInfo"
+
+
+class DebriefInfo(BaseModel):
+    """Study-completion disclosure revealed to the participant only after the
+    survey has been submitted, to preserve blinding during the conversation."""
+
+    condition: Condition
+    condition_label: str
+    condition_description: str
+    task_type: TaskType
+    task_split: str
+    task_idx: int
+    turn_count: int
+    completed: bool
