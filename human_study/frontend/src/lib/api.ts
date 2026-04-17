@@ -114,10 +114,11 @@ export const api = {
     free_text?: string | null;
   }) => post<SurveyCompleteResponse>("/survey", p),
 
-  annotationNext: (annotator_id: string) =>
-    get<AnnotationNextResponse>(
-      `/annotation/next?annotator_id=${encodeURIComponent(annotator_id)}`
-    ),
+  annotationNext: (annotator_id: string, session_id?: string | null) => {
+    const qs = new URLSearchParams({ annotator_id });
+    if (session_id) qs.set("session_id", session_id);
+    return get<AnnotationNextResponse>(`/annotation/next?${qs.toString()}`);
+  },
 
   submitAnnotation: (p: {
     annotator_id: string;

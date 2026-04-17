@@ -87,12 +87,39 @@ def _user_turn_count(db: Session, session: StudySession) -> int:
 @router.get("/next", response_model=AnnotationNextResponse)
 def get_next_session(
     annotator_id: str,
+    session_id: UUID | None = None,
     db: Session = Depends(get_session),
 ) -> AnnotationNextResponse:
-    """Return the next SURVEY_DONE session this annotator hasn't rated yet,
-    preferring sessions with fewer existing annotations for balance."""
+    """Return the next SURVEY_DONE session this annotator hasn't rated yet.
+
+    If `session_id` is supplied, return that specific session instead of
+    pulling from the queue — useful for researcher spot-checks or letting
+    someone review their own completed session.
+    """
     if not annotator_id:
         raise HTTPException(400, "annotator_id is required")
+
+    if session_id is not None:
+        target = db.get(StudySession, session_id)
+        if target is None:
+            raise HTTPException(404, "session not found")
+        if target.status != SessionStatus.SURVEY_DONE:
+            raise HTTPException(
+                409, "session has not been completed by a participant yet"
+            )
+        return AnnotationNextResponse(
+            session_id=target.id,
+            task_type=target.task_type,
+            task_split=target.task_split,
+            task_idx=target.task_idx,
+            task_instruction=(target.task_payload or {}).get("instruction", ""),
+            turn_count=_user_turn_count(db, target),
+            messages=_turns_as_messages(db, target),
+            survey_schema=_load_annotation_schema(),
+            annotations_done=0,
+            annotations_available=1,
+            done=False,
+        )
 
     already_annotated = db.exec(
         select(Annotation.session_id).where(Annotation.annotator_id == annotator_id)

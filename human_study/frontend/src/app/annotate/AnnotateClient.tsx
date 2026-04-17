@@ -22,13 +22,15 @@ export default function AnnotateClient() {
   const [completionCode, setCompletionCode] = useState<string | null>(null);
 
   const annotator_id = params.get("ANNOTATOR_ID") || params.get("annotator_id");
+  const pinned_session = params.get("session_id");
 
   const loadNext = useCallback(async () => {
     if (!annotator_id) return;
     try {
-      const res = await withRetry(() => api.annotationNext(annotator_id), {
-        attempts: 3,
-      });
+      const res = await withRetry(
+        () => api.annotationNext(annotator_id, pinned_session),
+        { attempts: 3 }
+      );
       if (res.done) {
         setPhase("done_all");
       } else {
@@ -39,7 +41,7 @@ export default function AnnotateClient() {
       setErrorMsg(err instanceof Error ? err.message : String(err));
       setPhase("error");
     }
-  }, [annotator_id]);
+  }, [annotator_id, pinned_session]);
 
   useEffect(() => {
     if (!annotator_id) {
