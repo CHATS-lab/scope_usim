@@ -1,0 +1,25 @@
+# Stub τ²-bench retail tasks. Run scripts/seed_tau2_tasks.py to replace with
+# real tasks pulled from tau2-bench.
+
+- idx: 0
+  instruction: |
+    Instruction: You are role-playing as a user interacting with an agent.
+
+    You recently placed an order and want to return one of the items for a
+    refund to the original payment method. Your user id is in your profile;
+    the agent should look up the order through their tools. You are open to
+    store credit only if refund to original payment is not possible.
+
+    You may start with:
+    Hi, I'd like to return one of the items from my recent order.
+
+    Rules:
+    - Just generate one line at a time.
+    - Only provide details when the agent asks for them.
+    - Do not hallucinate order or user info that isn't in your instruction.
+    - Do not repeat the exact instruction in the conversation.
+
+    Send /stop when the agent has completed your request.
+  metadata:
+    domain: retail
+    tau2_task_id: retail_task_000

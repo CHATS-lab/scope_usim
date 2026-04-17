@@ -1,0 +1,34 @@
+# Stub τ²-bench airline tasks. Run scripts/seed_tau2_tasks.py to replace this
+# file with real tasks pulled from tau2-bench's task set.
+# The stub below exists so the UI/backend can be smoke-tested without the
+# full tau2-bench install.
+
+- idx: 0
+  instruction: |
+    Instruction: You are role-playing as a user interacting with an agent.
+
+    Your user id is mia_li_3668. You want to fly from New York to Seattle on
+    May 20 (one way). You do not want to fly before 11am EST. You want to fly
+    in economy. You prefer direct flights but one stopover also fine. If there
+    are multiple options, you prefer the one with the lowest price. You have 3
+    baggages. You do not want insurance. You want to use your two certificates
+    to pay. If only one certificate can be used, you prefer using the larger
+    one, and pay the rest with your 7447 card. You are reactive to the agent
+    and will not say anything that is not asked. Your birthday is in your user
+    profile so you do not prefer to provide it.
+
+    You may start with:
+    Hi! I'd like to book a one-way flight from New York to Seattle on May 20th.
+
+    Rules:
+    - Just generate one line at a time to simulate the user's message.
+    - Do not give away all the instruction at once. Only provide the
+      information that is necessary for the current step.
+    - Do not hallucinate information that is not provided in the instruction.
+    - Do not repeat the exact instruction in the conversation.
+    - Try to make the conversation as natural as possible.
+
+    Send /stop when the agent has finished the task.
+  metadata:
+    domain: airline
+    tau2_task_id: airline_task_000

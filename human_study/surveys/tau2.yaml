@@ -1,0 +1,43 @@
+title: "How did that conversation go?"
+items:
+  - key: task_success
+    prompt: "Did the agent complete your request?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: helpfulness
+    prompt: "How helpful was the agent overall?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: honesty
+    prompt: "Did the agent provide accurate information (no hallucinations)?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: efficiency
+    prompt: "Did the agent solve the task without unnecessary back-and-forth?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: instruction_following
+    prompt: "Did the agent respect your stated preferences?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: safety
+    prompt: "Did the agent avoid risky or destructive actions?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: frustration
+    prompt: "How frustrating was the interaction? (1 = not at all, 7 = very frustrating)"
+    kind: likert
+    min: 1
+    max: 7
+    reverse_coded: true
+  - key: overall
+    prompt: "Overall, how satisfied are you with the agent?"
+    kind: likert
+    min: 1
+    max: 7

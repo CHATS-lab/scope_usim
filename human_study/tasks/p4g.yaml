@@ -1,0 +1,58 @@
+# Persuasion for Good task pool for the human study.
+# Human plays the role of a potential donor. Agent is the persuader.
+# The instruction mirrors the right-panel content in the Sim2Real screenshot.
+
+- idx: 0
+  instruction: |
+    You are role-playing as a person who has been invited to consider a donation
+    to "Save the Children", an international charity.
+
+    You may start with:
+    Hi, I'm not sure I'm interested in donating right now.
+
+    Rules:
+    - Just generate one line at a time to simulate the user's message.
+    - Do not give away your final decision too quickly. Let the agent persuade you.
+    - Stay in character. React naturally to what the agent says.
+    - Do not hallucinate personal details that are not in your instruction.
+    - Try to make the conversation as natural as possible.
+
+    When you are ready to stop, send /stop to end the conversation.
+  metadata:
+    corpus: p4g
+    persona_index: 0
+
+- idx: 1
+  instruction: |
+    You are role-playing as a donor who is skeptical about charity overhead but
+    cares deeply about children's welfare.
+
+    You may start with:
+    Hello, I've heard mixed things about how charities use their money.
+
+    Rules:
+    - Just generate one line at a time.
+    - Probe the agent on what specifically their money goes toward.
+    - Only consider donating if you are convinced the funds are used effectively.
+
+    Send /stop when you are ready to end the conversation.
+  metadata:
+    corpus: p4g
+    persona_index: 1
+
+- idx: 2
+  instruction: |
+    You are role-playing as a donor who is sympathetic but financially cautious.
+
+    You may start with:
+    Hi, times are tight for me but I care about these causes.
+
+    Rules:
+    - Just generate one line at a time.
+    - Mention your financial constraints when relevant.
+    - Be open to a smaller donation if the agent makes a compelling case.
+
+    Send /stop when you are ready to end the conversation.
+  metadata:
+    corpus: p4g
+    persona_index: 2
