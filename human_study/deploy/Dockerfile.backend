@@ -2,7 +2,21 @@
 FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+
+# Install tau2-bench from the vendored copy. Staged into ./vendor/tau2-bench
+# by the deploy rsync step so the container can install it offline.
+# The package's data files (retail/airline DBs, task sets, policies) live at
+# <repo>/data/tau2/... but aren't included in the wheel, so we copy the full
+# tree to /opt/tau2-bench and point TAU2_DATA_DIR at it.
+COPY vendor/tau2-bench /opt/tau2-bench
+RUN pip install --no-cache-dir /opt/tau2-bench
+ENV TAU2_DATA_DIR=/opt/tau2-bench/data
+
 COPY backend/pyproject.toml ./
 RUN pip install --no-cache-dir \
     "fastapi>=0.115" "uvicorn[standard]>=0.32" \
@@ -11,9 +25,6 @@ RUN pip install --no-cache-dir \
     "python-multipart>=0.0.12"
 
 COPY backend/app ./app
-# tasks/ and surveys/ live at the parent of /app so that tasks.py's
-# Path(__file__).parents[2].parent / "tasks" resolves correctly inside the
-# container (mirroring the layout in the repo).
 COPY tasks /tasks
 COPY surveys /surveys
 

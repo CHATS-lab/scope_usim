@@ -82,3 +82,5 @@ export const api = {
     free_text?: string | null;
   }) => post<{ completion_code: string }>("/survey", p),
 };
+
+export const CHAT_STREAM_URL = `${BASE}/chat/stream`;

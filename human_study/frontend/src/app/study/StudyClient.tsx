@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api, type ChatMessage, type SessionStartResponse, type SurveySchema } from "@/lib/api";
+import {
+  api,
+  CHAT_STREAM_URL,
+  type ChatMessage,
+  type SessionStartResponse,
+  type SurveySchema,
+} from "@/lib/api";
+import { postSSE } from "@/lib/sse";
 import { withRetry } from "@/lib/retry";
 import { ChatPanel } from "@/components/ChatPanel";
 import { InstructionPanel } from "@/components/InstructionPanel";
@@ -28,7 +35,6 @@ export default function StudyClient() {
   const [completionCode, setCompletionCode] = useState<string | null>(null);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
 
-  // Start the session once URL params are read.
   useEffect(() => {
     const prolific_pid = params.get("PROLIFIC_PID") || params.get("prolific_pid");
     const study_id = params.get("STUDY_ID") || params.get("study_id");
@@ -84,33 +90,124 @@ export default function StudyClient() {
         return;
       }
 
-      // Optimistic user bubble.
-      setMessages((m) => [...m, { role: "user", content: trimmed }]);
+      // Optimistic user bubble + placeholder assistant we stream into.
+      setMessages((m) => [
+        ...m,
+        { role: "user", content: trimmed },
+        { role: "assistant", content: "" },
+      ]);
       setAwaiting(true);
       setTransientError(null);
+
+      // Index of the assistant placeholder we're currently streaming into.
+      // We may create more assistant messages later if the model emits
+      // multiple passes (tool-call loop).
+      let activeAssistantIdx: number | null = null;
+      const seenToolCalls: Record<string, boolean> = {};
+
+      function ensureActiveAssistant(): number {
+        if (activeAssistantIdx !== null) return activeAssistantIdx;
+        let newIdx = -1;
+        setMessages((m) => {
+          newIdx = m.length;
+          return [...m, { role: "assistant", content: "" }];
+        });
+        activeAssistantIdx = newIdx;
+        return newIdx;
+      }
+
       try {
-        const reply = await withRetry(
-          () => api.chat({ session_id: session.session_id, user_message: trimmed }),
-          {
-            attempts: 3,
-            shouldRetry: (err) => {
-              // Don't retry on client errors (4xx other than 429).
-              const s = String(err);
-              return !/ 4\d\d /.test(s) || s.includes(" 429 ");
-            },
+        await postSSE(
+          CHAT_STREAM_URL,
+          { session_id: session.session_id, user_message: trimmed },
+          async (event, data: any) => {
+            switch (event) {
+              case "assistant_start": {
+                if (activeAssistantIdx === null) {
+                  // The initial placeholder we pushed above is the current one.
+                  activeAssistantIdx = -1;
+                  setMessages((m) => {
+                    activeAssistantIdx = m.length - 1;
+                    return m;
+                  });
+                } else {
+                  ensureActiveAssistant();
+                }
+                break;
+              }
+              case "assistant_delta": {
+                const delta = String(data?.content ?? "");
+                if (!delta) break;
+                const idx = activeAssistantIdx ?? ensureActiveAssistant();
+                setMessages((m) => {
+                  const next = [...m];
+                  const cur = next[idx];
+                  if (cur && cur.role === "assistant") {
+                    next[idx] = { ...cur, content: (cur.content ?? "") + delta };
+                  }
+                  return next;
+                });
+                break;
+              }
+              case "assistant_end": {
+                const idx = activeAssistantIdx;
+                if (idx !== null) {
+                  setMessages((m) => {
+                    const next = [...m];
+                    const cur = next[idx];
+                    if (cur && cur.role === "assistant") {
+                      next[idx] = {
+                        ...cur,
+                        content: data?.content ?? cur.content,
+                        tool_calls: data?.tool_calls ?? null,
+                      };
+                    }
+                    return next;
+                  });
+                }
+                activeAssistantIdx = null;
+                break;
+              }
+              case "tool_start": {
+                // nothing to render yet; card shows pending once assistant_end
+                // landed the tool_calls array.
+                break;
+              }
+              case "tool_end": {
+                const tcId: string = data?.tool_call_id;
+                if (!tcId || seenToolCalls[tcId]) break;
+                seenToolCalls[tcId] = true;
+                setMessages((m) => [
+                  ...m,
+                  {
+                    role: "tool",
+                    content: JSON.stringify(data.result, null, 0),
+                    tool_call_id: tcId,
+                    tool_name: data?.name ?? null,
+                  },
+                ]);
+                break;
+              }
+              case "error": {
+                setTransientError(String(data?.message ?? "stream error"));
+                break;
+              }
+              case "done": {
+                break;
+              }
+            }
           }
         );
-        setMessages((m) => [...m, ...reply.messages]);
       } catch (err) {
-        // Roll back the optimistic user message and surface the error banner so
-        // the participant can retry.
-        setMessages((m) => {
-          const idx = [...m].reverse().findIndex((x) => x.role === "user");
-          if (idx === -1) return m;
-          const realIdx = m.length - 1 - idx;
-          return [...m.slice(0, realIdx), ...m.slice(realIdx + 1)];
-        });
         setTransientError(describeError(err));
+        // Clean up the empty placeholder if it received nothing.
+        setMessages((m) => {
+          const last = m[m.length - 1];
+          if (last && last.role === "assistant" && !last.content && !last.tool_calls) {
+            return m.slice(0, -1);
+          }
+          return m;
+        });
       } finally {
         setAwaiting(false);
       }

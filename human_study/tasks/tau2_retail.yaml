@@ -1,25 +1,221 @@
-# Stub τ²-bench retail tasks. Run scripts/seed_tau2_tasks.py to replace with
-# real tasks pulled from tau2-bench.
-
 - idx: 0
-  instruction: |
-    Instruction: You are role-playing as a user interacting with an agent.
-
-    You recently placed an order and want to return one of the items for a
-    refund to the original payment method. Your user id is in your profile;
-    the agent should look up the order through their tools. You are open to
-    store credit only if refund to original payment is not possible.
-
-    You may start with:
-    Hi, I'd like to return one of the items from my recent order.
-
-    Rules:
-    - Just generate one line at a time.
-    - Only provide details when the agent asks for them.
-    - Do not hallucinate order or user info that isn't in your instruction.
-    - Do not repeat the exact instruction in the conversation.
-
-    Send /stop when the agent has completed your request.
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou received your order #W2378156 and wish to exchange the\
+    \ mechanical keyboard for a similar one but with clicky switches and the smart thermostat for one\
+    \ compatible with Google Home instead of Apple HomeKit. If there is no keyboard that is clicky, RGB\
+    \ backlight, full size, you'd go for no backlight.\n\tKnown info:\n\t\tYou are Yusuf Rossi in zip\
+    \ code 19122.\n\tUnknown info:\n\t\tYou do not remember your email address.\n\tTask instructions:\n\
+    \t\tYou are detail-oriented and want to make sure everything is addressed in one go.\n\nRules:\n-\
+    \ Just generate one line at a time to simulate the user's message.\n- Do not give away all the instruction\
+    \ at once. Only provide the information that is necessary for the current step.\n- Do not hallucinate\
+    \ information that is not provided in the instruction.\n- Do not repeat the exact instruction in the\
+    \ conversation.\n- Try to make the conversation as natural as possible.\n\nSend /stop when the agent\
+    \ has finished the task."
   metadata:
     domain: retail
-    tau2_task_id: retail_task_000
+    tau2_task_id: '0'
+- idx: 1
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou received your order #W2378156 and wish to exchange the\
+    \ mechanical keyboard for a similar one but with clicky switches and the smart thermostat for one\
+    \ compatible with Google Home instead of Apple HomeKit. If there is no keyboard that is clicky, RGB\
+    \ backlight, full size, you'd rather only exchange the thermostat.\n\tKnown info:\n\t\tYou are Yusuf\
+    \ Rossi in zip code 19122.\n\tUnknown info:\n\t\tYou do not remember your email address\n\tTask instructions:\n\
+    \t\tYou are detail-oriented and want to make sure everything is addressed in one go.\n\nRules:\n-\
+    \ Just generate one line at a time to simulate the user's message.\n- Do not give away all the instruction\
+    \ at once. Only provide the information that is necessary for the current step.\n- Do not hallucinate\
+    \ information that is not provided in the instruction.\n- Do not repeat the exact instruction in the\
+    \ conversation.\n- Try to make the conversation as natural as possible.\n\nSend /stop when the agent\
+    \ has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '1'
+- idx: 2
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou want to know how many tshirt options are available in\
+    \ the online store right now. You want to also return the cleaner, headphone, and smart watch.\n\t\
+    Known info:\n\t\tYou are Yusuf Rossi in zip code 19122.\n\tUnknown info:\n\t\tYou do not remember\
+    \ your email address\n\tTask instructions:\n\t\t.\n\nRules:\n- Just generate one line at a time to\
+    \ simulate the user's message.\n- Do not give away all the instruction at once. Only provide the information\
+    \ that is necessary for the current step.\n- Do not hallucinate information that is not provided in\
+    \ the instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try to make the\
+    \ conversation as natural as possible.\n\nSend /stop when the agent has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '2'
+- idx: 3
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou want to know how many tshirt options are available in\
+    \ the online store right now. You want to modify all your pending small tshirt to purple, same size,\
+    \ same v-neck, and prefer polyester.\n\tKnown info:\n\t\tYou are Yusuf Rossi in zipcode 19122.\n\t\
+    Unknown info:\n\t\tYou do not remember your email address\n\tTask instructions:\n\t\tYou are a private\
+    \ person that does not want to reveal much about yourself.\n\nRules:\n- Just generate one line at\
+    \ a time to simulate the user's message.\n- Do not give away all the instruction at once. Only provide\
+    \ the information that is necessary for the current step.\n- Do not hallucinate information that is\
+    \ not provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n-\
+    \ Try to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the\
+    \ task."
+  metadata:
+    domain: retail
+    tau2_task_id: '3'
+- idx: 4
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou want to know how many tshirt options are available in\
+    \ the online store right now. You want to modify all your pending tshirts to purple, s size, same\
+    \ v-neck, and prefer polyester.\n\tKnown info:\n\t\tYou are Yusuf Rossi in zipcode 19122.\n\tUnknown\
+    \ info:\n\t\tYou do not remember your email address.\n\tTask instructions:\n\t\tYou are a private\
+    \ person that does not want to reveal much about yourself.\n\nRules:\n- Just generate one line at\
+    \ a time to simulate the user's message.\n- Do not give away all the instruction at once. Only provide\
+    \ the information that is necessary for the current step.\n- Do not hallucinate information that is\
+    \ not provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n-\
+    \ Try to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the\
+    \ task."
+  metadata:
+    domain: retail
+    tau2_task_id: '4'
+- idx: 5
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou want to exchange the water bottle and the desk lamp.\
+    \ You want to exchange the water bottle to a bigger one, and the desk lamp to a less bright one (prefer\
+    \ battery > USB > AC). If the agent asks for confirmation, only exchange the desk lamp. If the agent\
+    \ asks for confirmation again, do not exchange anything, and return the water bottle instead.\n\t\
+    Known info:\n\t\tYou are mei_kovacs_8020 in zipcode 28236.\n\tUnknown info:\n\t\tYou do not remember\
+    \ your email address\n\tTask instructions:\n\t\t.\n\nRules:\n- Just generate one line at a time to\
+    \ simulate the user's message.\n- Do not give away all the instruction at once. Only provide the information\
+    \ that is necessary for the current step.\n- Do not hallucinate information that is not provided in\
+    \ the instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try to make the\
+    \ conversation as natural as possible.\n\nSend /stop when the agent has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '5'
+- idx: 6
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou want to exchange the water bottle and the desk lamp.\
+    \ You want to exchange the water bottle to a bigger one, and the desk lamp to a less bright one (prefer\
+    \ battery > USB > AC). If the agent asks for confirmation, only exchange the desk lamp.\n\tKnown info:\n\
+    \t\tYou are mei_kovacs_8020 living in zipcode 28236.\n\tUnknown info:\n\t\tYou do not remember your\
+    \ email address\n\tTask instructions:\n\t\t.\n\nRules:\n- Just generate one line at a time to simulate\
+    \ the user's message.\n- Do not give away all the instruction at once. Only provide the information\
+    \ that is necessary for the current step.\n- Do not hallucinate information that is not provided in\
+    \ the instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try to make the\
+    \ conversation as natural as possible.\n\nSend /stop when the agent has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '6'
+- idx: 7
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou want to exchange the water bottle and the desk lamp.\
+    \ You want to exchange the water bottle to a bigger one, and the desk lamp to a less bright one (prefer\
+    \ AC adapter > battery > USB). If the agent asks for confirmation, only exchange the desk lamp.\n\t\
+    Known info:\n\t\tYou are mei_kovacs_8020 living in zipcode 28236.\n\tUnknown info:\n\t\tYou do not\
+    \ remember your email address\n\tTask instructions:\n\t\t.\n\nRules:\n- Just generate one line at\
+    \ a time to simulate the user's message.\n- Do not give away all the instruction at once. Only provide\
+    \ the information that is necessary for the current step.\n- Do not hallucinate information that is\
+    \ not provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n-\
+    \ Try to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the\
+    \ task."
+  metadata:
+    domain: retail
+    tau2_task_id: '7'
+- idx: 8
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou want to exchange the water bottle and the desk lamp.\
+    \ You want to exchange the water bottle to a bigger one, and the desk lamp to a brighter one (prefer\
+    \ battery > USB > AC). If the agent asks for confirmation, only exchange the desk lamp.\n\tKnown info:\n\
+    \t\tYou are mei_kovacs_8020 living in zipcode 28236.\n\tUnknown info:\n\t\tYou do not remember your\
+    \ email address\n\tTask instructions:\n\t\t.\n\nRules:\n- Just generate one line at a time to simulate\
+    \ the user's message.\n- Do not give away all the instruction at once. Only provide the information\
+    \ that is necessary for the current step.\n- Do not hallucinate information that is not provided in\
+    \ the instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try to make the\
+    \ conversation as natural as possible.\n\nSend /stop when the agent has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '8'
+- idx: 9
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou want to exchange the water bottle and the desk lamp.\
+    \ You want to exchange the water bottle to a bigger one, and the desk lamp to a brighter one (prefer\
+    \ AC adapter > battery > USB). When the agent asks for confirmation, suddenly change your mind and\
+    \ ask to only exchange the desk lamp.\n\tKnown info:\n\t\tYou are mei_kovacs_8020 living in zipcode\
+    \ 28236.\n\tUnknown info:\n\t\tYou don't know your email.\n\tTask instructions:\n\t\t.\n\nRules:\n\
+    - Just generate one line at a time to simulate the user's message.\n- Do not give away all the instruction\
+    \ at once. Only provide the information that is necessary for the current step.\n- Do not hallucinate\
+    \ information that is not provided in the instruction.\n- Do not repeat the exact instruction in the\
+    \ conversation.\n- Try to make the conversation as natural as possible.\n\nSend /stop when the agent\
+    \ has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '9'
+- idx: 10
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tFor some reason, you want to return all things ordered.\
+    \ You have two payment methods and two orders, and you want to refund each order to the other order's\
+    \ payment method. If not possible, you are angry and swear for a few times, then ask for human representative.\n\
+    \tKnown info:\n\t\tYou are mia_garcia_4516 (mia.garcia2723@example.com).\n\tTask instructions:\n\t\
+    \tYou are a mysterious person and do not want to reveal much about yourself or speak too many words\
+    \ at the same time.\n\nRules:\n- Just generate one line at a time to simulate the user's message.\n\
+    - Do not give away all the instruction at once. Only provide the information that is necessary for\
+    \ the current step.\n- Do not hallucinate information that is not provided in the instruction.\n-\
+    \ Do not repeat the exact instruction in the conversation.\n- Try to make the conversation as natural\
+    \ as possible.\n\nSend /stop when the agent has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '10'
+- idx: 11
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tFor some reason, you want to return all things ordered.\
+    \ You have two payment methods and two orders, and you want to refund each order to the other order's\
+    \ payment method. If not possible, you are angry and swear for a few times, then agree to return all\
+    \ things with the original payment method.\n\tKnown info:\n\t\tYou are mia_garcia_4516 (mia.garcia2723@example.com).\n\
+    \tTask instructions:\n\t\tYou are a mysterious person and do not want to reveal much about yourself\
+    \ or speak too many words at the same time.\n\nRules:\n- Just generate one line at a time to simulate\
+    \ the user's message.\n- Do not give away all the instruction at once. Only provide the information\
+    \ that is necessary for the current step.\n- Do not hallucinate information that is not provided in\
+    \ the instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try to make the\
+    \ conversation as natural as possible.\n\nSend /stop when the agent has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '11'
+- idx: 12
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou just got into gaming and want to cancel or return everything\
+    \ not associated with it. (Everything except a keyboard and a mouse, but do not reveal it to the agent).\
+    \ PayPal is prefered for refund, but otherwise you are angry and ask for human agent for help.\n\t\
+    Known info:\n\t\tYou are mia_garcia_4516 (mia.garcia2723@example.com).\n\tTask instructions:\n\t\t\
+    You are into gaming but realized the importance of studying hard recently.\n\nRules:\n- Just generate\
+    \ one line at a time to simulate the user's message.\n- Do not give away all the instruction at once.\
+    \ Only provide the information that is necessary for the current step.\n- Do not hallucinate information\
+    \ that is not provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n\
+    - Try to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the\
+    \ task."
+  metadata:
+    domain: retail
+    tau2_task_id: '12'
+- idx: 13
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou just got into gaming and want to cancel or return everything\
+    \ not associated with it. (Everything except a keyboard and a mouse, but do not reveal it to the agent).\
+    \ PayPal is prefered for refund, but otherwise credit card can be accepted.\n\tKnown info:\n\t\tYou\
+    \ are mia_garcia_4516 with email mia.garcia2723@example.com\n\tTask instructions:\n\t\tYou are into\
+    \ gaming but realized the importance of studying hard.\n\nRules:\n- Just generate one line at a time\
+    \ to simulate the user's message.\n- Do not give away all the instruction at once. Only provide the\
+    \ information that is necessary for the current step.\n- Do not hallucinate information that is not\
+    \ provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try\
+    \ to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '13'
+- idx: 14
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: retail\n\tReason for call:\n\t\tYou just quit gaming and want to cancel or return everything\
+    \ associated with it. (It's just a keyboard and a mouse, but do not reveal it to the agent). Original\
+    \ payment is preferred.\n\tKnown info:\n\t\tYou are mia_garcia_4516 with email mia.garcia2723@example.com\n\
+    \tTask instructions:\n\t\tYou are into gaming but realized the importance of studying hard.\n\nRules:\n\
+    - Just generate one line at a time to simulate the user's message.\n- Do not give away all the instruction\
+    \ at once. Only provide the information that is necessary for the current step.\n- Do not hallucinate\
+    \ information that is not provided in the instruction.\n- Do not repeat the exact instruction in the\
+    \ conversation.\n- Try to make the conversation as natural as possible.\n\nSend /stop when the agent\
+    \ has finished the task."
+  metadata:
+    domain: retail
+    tau2_task_id: '14'
