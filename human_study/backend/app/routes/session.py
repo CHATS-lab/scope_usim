@@ -21,6 +21,7 @@ from ..schemas import (
     TaskOutcome,
 )
 from ..services.conditions import assign_condition
+from ..services.outcome import compute_task_outcome
 from ..services.tasks import get_task, pick_task_for_session
 
 router = APIRouter(prefix="/session", tags=["session"])
@@ -47,15 +48,19 @@ _CONDITION_LABELS: dict[Condition, tuple[str, str]] = {
 
 
 def _debrief_for_completed(db: Session, session: StudySession) -> DebriefInfo:
-    """Build a minimal debrief for a session that's already SURVEY_DONE.
-    We don't re-run tau2 evaluation here to keep the endpoint fast; we surface
-    a neutral outcome card and leave detailed scoring for the original submit."""
+    """Build the full debrief for a SURVEY_DONE session.
+
+    We recompute the task outcome from stored state (survey responses for P4G,
+    conversation turns for τ²) so the participant always sees the real
+    success/partial/failure indicator, not a placeholder, even on re-open.
+    """
     turn_count = db.exec(
         select(func.count(Turn.id)).where(
             Turn.session_id == session.id, Turn.role == TurnRole.USER
         )
     ).one() or 0
     label, desc = _CONDITION_LABELS[session.condition]
+    task_outcome = compute_task_outcome(db, session)
     return DebriefInfo(
         condition=session.condition,
         condition_label=label,
@@ -65,14 +70,7 @@ def _debrief_for_completed(db: Session, session: StudySession) -> DebriefInfo:
         task_idx=session.task_idx,
         turn_count=int(turn_count),
         completed=True,
-        task_outcome=TaskOutcome(
-            status="not_evaluated",
-            label="Your session is already submitted",
-            detail=(
-                "You completed this study earlier. Your responses were saved and "
-                "your completion code is shown above."
-            ),
-        ),
+        task_outcome=task_outcome,
     )
 
 

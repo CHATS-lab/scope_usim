@@ -138,15 +138,40 @@ function OutcomeCard({ outcome }: { outcome: TaskOutcome }) {
   return (
     <section
       aria-labelledby="outcome-heading"
-      className={cn("rounded-lg border p-4", config.wrap)}
+      className={cn(
+        "rounded-xl border-2 p-5 shadow-lg",
+        config.wrap
+      )}
     >
-      <div className="flex items-start gap-3">
-        <Icon className={cn("mt-0.5 h-5 w-5 flex-shrink-0", config.icon_color)} aria-hidden="true" />
-        <div>
-          <h2 id="outcome-heading" className={cn("text-sm font-semibold", config.title_color)}>
+      <div className="flex items-start gap-4">
+        <div
+          className={cn(
+            "flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full",
+            config.icon_bg
+          )}
+        >
+          <Icon
+            className={cn("h-7 w-7", config.icon_color)}
+            aria-hidden="true"
+            strokeWidth={2.5}
+          />
+        </div>
+        <div className="flex-1">
+          <div
+            className={cn(
+              "text-[11px] font-semibold uppercase tracking-wider",
+              config.tag_color
+            )}
+          >
+            {config.tag}
+          </div>
+          <h2
+            id="outcome-heading"
+            className={cn("mt-0.5 text-lg font-semibold", config.title_color)}
+          >
             {outcome.label}
           </h2>
-          <p className="mt-1 text-sm leading-relaxed text-muted">{outcome.detail}</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted">{outcome.detail}</p>
         </div>
       </div>
     </section>
@@ -159,31 +184,46 @@ const OUTCOME_STYLES: Record<
     icon: typeof CheckCircle2;
     wrap: string;
     icon_color: string;
+    icon_bg: string;
     title_color: string;
+    tag: string;
+    tag_color: string;
   }
 > = {
   success: {
     icon: CheckCircle2,
-    wrap: "border-emerald-400/30 bg-emerald-400/5",
-    icon_color: "text-emerald-400",
-    title_color: "text-emerald-100",
+    wrap: "border-emerald-400/60 bg-emerald-400/10",
+    icon_color: "text-emerald-300",
+    icon_bg: "bg-emerald-400/20",
+    title_color: "text-emerald-50",
+    tag: "Task outcome · Success",
+    tag_color: "text-emerald-300",
   },
   partial: {
     icon: CircleDashed,
-    wrap: "border-amber-400/30 bg-amber-400/5",
-    icon_color: "text-amber-400",
-    title_color: "text-amber-100",
+    wrap: "border-amber-400/60 bg-amber-400/10",
+    icon_color: "text-amber-300",
+    icon_bg: "bg-amber-400/20",
+    title_color: "text-amber-50",
+    tag: "Task outcome · Partial",
+    tag_color: "text-amber-300",
   },
   failure: {
     icon: XCircle,
-    wrap: "border-red-400/30 bg-red-400/5",
-    icon_color: "text-red-400",
-    title_color: "text-red-100",
+    wrap: "border-red-400/60 bg-red-400/10",
+    icon_color: "text-red-300",
+    icon_bg: "bg-red-400/20",
+    title_color: "text-red-50",
+    tag: "Task outcome · Not completed",
+    tag_color: "text-red-300",
   },
   not_evaluated: {
     icon: AlertCircle,
     wrap: "border-border bg-panelAlt",
     icon_color: "text-muted",
+    icon_bg: "bg-border/60",
     title_color: "text-text",
+    tag: "Task outcome · Pending",
+    tag_color: "text-muted",
   },
 };

@@ -15,7 +15,7 @@ from ..models import (
 )
 from ..schemas import DebriefInfo, SurveySubmitRequest, SurveySubmitResponse, TaskOutcome
 from ..services.conditions import generate_completion_code
-from ..services.tau2_tools import evaluate_completed_session
+from ..services.outcome import compute_task_outcome
 
 
 # Human-readable descriptions revealed post-survey. Phrased in plain language
@@ -83,7 +83,7 @@ def submit_survey(
     ).one() or 0
 
     label, description = _CONDITION_LABELS[session.condition]
-    task_outcome = _evaluate_outcome(db, session, req)
+    task_outcome = compute_task_outcome(db, session, survey_responses=req.responses)
 
     debrief = DebriefInfo(
         condition=session.condition,
@@ -100,7 +100,10 @@ def submit_survey(
     return SurveySubmitResponse(completion_code=code, debrief=debrief)
 
 
-def _evaluate_outcome(
+# --- legacy inline helpers retained only as a reference; real logic now lives
+# --- in app/services/outcome.py so /session/start can share it.
+
+def _legacy_evaluate_outcome_unused(
     db: Session, session: StudySession, req: SurveySubmitRequest
 ) -> TaskOutcome:
     """Produce a task-type-specific outcome reveal for the debrief."""
