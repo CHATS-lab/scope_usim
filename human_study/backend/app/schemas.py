@@ -70,6 +70,37 @@ class SurveySubmitResponse(BaseModel):
     debrief: "DebriefInfo"
 
 
+# -- Annotation mode ---------------------------------------------------------
+
+
+class AnnotationNextResponse(BaseModel):
+    """Next session available for annotation, plus task context."""
+    session_id: UUID
+    task_type: TaskType
+    task_split: str
+    task_idx: int
+    task_instruction: str
+    turn_count: int
+    messages: list["ChatMessage"]
+    survey_schema: dict[str, Any]
+    # Counters so the annotator has a sense of progress.
+    annotations_done: int
+    annotations_available: int
+    done: bool = False
+
+
+class AnnotationSubmitRequest(BaseModel):
+    annotator_id: str
+    session_id: UUID
+    responses: dict[str, Any]
+    free_text: str | None = None
+
+
+class AnnotationSubmitResponse(BaseModel):
+    completion_code: str | None = None
+    next_available: bool
+
+
 class DebriefInfo(BaseModel):
     """Study-completion disclosure revealed to the participant only after the
     survey has been submitted, to preserve blinding during the conversation."""

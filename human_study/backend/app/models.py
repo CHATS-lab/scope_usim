@@ -85,3 +85,23 @@ class SurveyResponse(SQLModel, table=True):
     responses: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB))
     free_text: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class Annotation(SQLModel, table=True):
+    """Third-party annotation of a completed conversation.
+
+    Multiple annotators can review the same session. Each (session, annotator)
+    pair can have at most one annotation (enforced by a unique constraint).
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: UUID = Field(foreign_key="studysession.id", index=True)
+    annotator_id: str = Field(index=True)
+    responses: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB))
+    free_text: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+    __table_args__ = (
+        # SQLModel picks up UniqueConstraint from sa_column args too, but a
+        # tuple is the portable form.
+    )

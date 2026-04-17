@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import init_db
-from .routes import chat, session, stop, survey
+from .routes import annotation, chat, session, stop, survey
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app.include_router(session.router)
 app.include_router(chat.router)
 app.include_router(stop.router)
 app.include_router(survey.router)
+app.include_router(annotation.router)
 
 
 @app.get("/health")

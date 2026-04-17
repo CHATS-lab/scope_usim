@@ -113,7 +113,38 @@ export const api = {
     responses: Record<string, unknown>;
     free_text?: string | null;
   }) => post<SurveyCompleteResponse>("/survey", p),
+
+  annotationNext: (annotator_id: string) =>
+    get<AnnotationNextResponse>(
+      `/annotation/next?annotator_id=${encodeURIComponent(annotator_id)}`
+    ),
+
+  submitAnnotation: (p: {
+    annotator_id: string;
+    session_id: string;
+    responses: Record<string, unknown>;
+    free_text?: string | null;
+  }) => post<AnnotationSubmitResponse>("/annotation", p),
 };
+
+export interface AnnotationNextResponse {
+  session_id: string;
+  task_type: TaskType;
+  task_split: string;
+  task_idx: number;
+  task_instruction: string;
+  turn_count: number;
+  messages: ChatMessage[];
+  survey_schema: SurveySchema;
+  annotations_done: number;
+  annotations_available: number;
+  done: boolean;
+}
+
+export interface AnnotationSubmitResponse {
+  completion_code: string | null;
+  next_available: boolean;
+}
 
 export interface DebriefInfo {
   condition: Condition;

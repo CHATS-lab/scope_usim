@@ -9,6 +9,7 @@ import { Markdown } from "./Markdown";
 import { ToolCallCard } from "./ToolCallCard";
 import { TypingIndicator } from "./TypingIndicator";
 import { InputBar } from "./InputBar";
+import { SpeakerBadge } from "./SpeakerBadge";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { useScrollToBottom } from "@/hooks/useScrollToBottom";
 
@@ -19,6 +20,10 @@ interface Props {
   onRequestStop: () => void;
   disabled: boolean;
   awaiting: boolean;
+  /** "participant" = the user is the human talking; "annotator" = reviewing someone else's chat */
+  perspective?: "participant" | "annotator";
+  /** When true, hide the input bar entirely (annotator / read-only mode). */
+  readOnly?: boolean;
 }
 
 export function ChatPanel({
@@ -28,6 +33,8 @@ export function ChatPanel({
   onRequestStop,
   disabled,
   awaiting,
+  perspective = "participant",
+  readOnly = false,
 }: Props) {
   const { value: input, setValue: setInput, clear: clearDraft } = useDraftPersistence(sessionId);
 
@@ -84,7 +91,12 @@ export function ChatPanel({
           )}
 
           {messages.map((m, i) => (
-            <MessageBubble key={i} msg={m} allToolResults={toolResultsById} />
+            <MessageBubble
+              key={i}
+              msg={m}
+              allToolResults={toolResultsById}
+              perspective={perspective}
+            />
           ))}
 
           {pendingTool && (
@@ -110,13 +122,15 @@ export function ChatPanel({
         )}
       </div>
 
-      <InputBar
-        value={input}
-        onChange={setInput}
-        onSubmit={handleSubmit}
-        onRequestStop={onRequestStop}
-        disabled={disabled}
-      />
+      {!readOnly && (
+        <InputBar
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmit}
+          onRequestStop={onRequestStop}
+          disabled={disabled}
+        />
+      )}
     </div>
   );
 }
@@ -132,15 +146,18 @@ function StatusChip({ children }: { children: React.ReactNode }) {
 function MessageBubble({
   msg,
   allToolResults,
+  perspective,
 }: {
   msg: ChatMessage;
   allToolResults: Record<string, ChatMessage>;
+  perspective: "participant" | "annotator";
 }) {
   if (msg.role === "tool") return null; // Rendered inside the assistant bubble.
 
   if (msg.role === "user") {
     return (
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1">
+        <SpeakerBadge role="user" perspective={perspective} align="right" size="sm" />
         <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-accent/15 px-4 py-2 text-sm text-text">
           {msg.content}
         </div>
@@ -149,7 +166,8 @@ function MessageBubble({
   }
 
   return (
-    <div className="group space-y-2 py-1">
+    <div className="group flex flex-col gap-1 py-1">
+      <SpeakerBadge role="assistant" perspective={perspective} align="left" size="sm" />
       {msg.content && (
         <div className="relative rounded-2xl bg-panel/50 px-4 py-3 text-sm text-text">
           <Markdown>{msg.content}</Markdown>
