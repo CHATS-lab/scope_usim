@@ -85,10 +85,26 @@ def _p4g_outcome(responses: dict[str, Any]) -> TaskOutcome:
 
 def _tau2_outcome(db: Session, session: StudySession) -> TaskOutcome:
     turns = db.exec(
-        select(Turn).where(Turn.session_id == session.id).order_by(Turn.turn_idx)
+        select(Turn)
+        .where(Turn.session_id == session.id)
+        .order_by(Turn.turn_idx, Turn.id)
     ).all()
-    api_messages: list[dict[str, Any]] = []
+
+    # Defensive: dedupe on turn_idx. Legacy sessions written before we blocked
+    # concurrent sends can have two rows with the same turn_idx from a race;
+    # the tau2 evaluator won't tolerate the resulting malformed sequence.
+    # We keep the first occurrence per idx (which, ordered by id, is the
+    # earlier-committed one).
+    seen_idx: set[int] = set()
+    ordered: list[Turn] = []
     for t in turns:
+        if t.turn_idx in seen_idx:
+            continue
+        seen_idx.add(t.turn_idx)
+        ordered.append(t)
+
+    api_messages: list[dict[str, Any]] = []
+    for t in ordered:
         if t.role == TurnRole.USER:
             api_messages.append({"role": "user", "content": t.content or ""})
         elif t.role == TurnRole.AGENT:
@@ -146,10 +162,13 @@ def _tau2_outcome(db: Session, session: StudySession) -> TaskOutcome:
     if result.get("reason"):
         return TaskOutcome(
             status="not_evaluated",
-            label="Outcome not available",
+            label="Automatic evaluation unavailable",
             detail=(
-                "We weren't able to automatically evaluate this session. Your "
-                "responses still count toward the study."
+                "We couldn't score this session automatically — usually because "
+                "the conversation didn't reach a clean terminal state (e.g. the "
+                "agent was still mid-task when /stop was pressed, or the "
+                "conversation structure confused the evaluator). Your ratings "
+                "still count toward the study."
             ),
         )
     return TaskOutcome(

@@ -88,6 +88,35 @@ def _jsonify(value: Any) -> Any:
     return str(value)
 
 
+def _unwrap_tool_content(raw: Any) -> str | None:
+    """Reverse `Tau2Runtime.execute`'s {"ok": bool, "result": ...} envelope.
+
+    Returns a string the tau2 evaluator can parse the same way it parses a
+    live tool message. Falls back to the raw content for non-wrapped values.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
+    else:
+        parsed = raw
+    if isinstance(parsed, dict) and "ok" in parsed and ("result" in parsed or "error" in parsed):
+        if parsed.get("ok"):
+            inner = parsed.get("result")
+        else:
+            inner = parsed.get("error") or parsed.get("error_type") or "error"
+        if isinstance(inner, (dict, list)):
+            return json.dumps(inner, ensure_ascii=False, default=str)
+        return str(inner) if inner is not None else None
+    # Not our wrapper -- hand back the original string representation.
+    if isinstance(raw, str):
+        return raw
+    return json.dumps(raw, ensure_ascii=False, default=str)
+
+
 def parse_tool_arguments(raw: str) -> dict[str, Any]:
     """OpenAI returns tool arguments as a JSON string; decode defensively."""
     if not raw:
@@ -195,11 +224,17 @@ def evaluate_completed_session(
                 )
             )
         elif role == "tool":
+            raw_content = m.get("content")
+            # We store tool results wrapped as {"ok": bool, "result": ...,
+            # "error": "..."} so the UI can show success/failure badges. tau2's
+            # evaluator re-executes the tool calls and compares raw outputs,
+            # so unwrap here to match what tau2 expects to see on the wire.
+            unwrapped = _unwrap_tool_content(raw_content)
             tau2_msgs.append(
                 Tau2ToolMessage(
                     role="tool",
                     id=m.get("tool_call_id", ""),
-                    content=m.get("content"),
+                    content=unwrapped,
                     requestor="assistant",
                 )
             )
