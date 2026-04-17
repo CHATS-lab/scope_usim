@@ -63,15 +63,23 @@ export default function StudyClient() {
           { attempts: 3 }
         );
         setSession(s);
-        // If this is a resumed session (e.g. participant refreshed the page),
-        // pull the existing turns from the backend so the conversation feels
-        // continuous rather than starting from a blank chat.
+
+        // Participant is returning after already finishing — jump straight to
+        // the debrief screen with their existing completion code.
+        if (s.already_completed && s.completion_code && s.debrief) {
+          setCompletionCode(s.completion_code);
+          setDebrief(s.debrief);
+          setPhase("done");
+          return;
+        }
+
+        // Resumed mid-conversation: restore history so the chat feels continuous.
         if (s.resumed) {
           try {
             const prior = await api.getTurns(s.session_id);
             if (prior.length > 0) setMessages(prior);
           } catch {
-            // Non-fatal: the rest of the flow still works.
+            // Non-fatal.
           }
         }
         setPhase("chatting");

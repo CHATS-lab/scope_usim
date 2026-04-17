@@ -11,6 +11,9 @@ export interface SessionStartResponse {
   task_instruction: string;
   task_metadata: Record<string, unknown>;
   resumed: boolean;
+  already_completed?: boolean;
+  completion_code?: string | null;
+  debrief?: DebriefInfo | null;
 }
 
 export interface ToolCall {

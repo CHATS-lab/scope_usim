@@ -24,6 +24,12 @@ class SessionStartResponse(BaseModel):
     task_instruction: str
     task_metadata: dict[str, Any]
     resumed: bool = False
+    # When a PID that has already finished comes back (refresh / re-open link),
+    # we return the existing completion info instead of erroring so they can
+    # still copy their Prolific code.
+    already_completed: bool = False
+    completion_code: str | None = None
+    debrief: "DebriefInfo | None" = None
 
 
 class ChatMessage(BaseModel):
