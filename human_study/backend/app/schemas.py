@@ -75,4 +75,14 @@ class DebriefInfo(BaseModel):
     task_split: str
     task_idx: int
     turn_count: int
+    # Whether the session reached the survey (true if we got here).
     completed: bool
+    # Task-specific outcome reveal (populated post-hoc).
+    task_outcome: "TaskOutcome"
+
+
+class TaskOutcome(BaseModel):
+    # "success" | "partial" | "failure" | "not_evaluated"
+    status: str
+    label: str
+    detail: str

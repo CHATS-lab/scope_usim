@@ -1,9 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Copy, Check } from "lucide-react";
-import type { DebriefInfo } from "@/lib/api";
+import {
+  CheckCircle2,
+  Copy,
+  Check,
+  XCircle,
+  CircleDashed,
+  AlertCircle,
+} from "lucide-react";
+import type { DebriefInfo, TaskOutcome } from "@/lib/api";
 import { copyToClipboard } from "@/lib/copy";
+import { cn } from "@/lib/cn";
 
 interface Props {
   completionCode: string;
@@ -71,6 +79,8 @@ export function DebriefPanel({ completionCode, debrief }: Props) {
           </div>
         </section>
 
+        <OutcomeCard outcome={debrief.task_outcome} />
+
         <section aria-labelledby="debrief-heading" className="space-y-3">
           <h2 id="debrief-heading" className="text-sm font-semibold text-text">
             About the agent you spoke with
@@ -121,3 +131,59 @@ export function DebriefPanel({ completionCode, debrief }: Props) {
     </main>
   );
 }
+
+function OutcomeCard({ outcome }: { outcome: TaskOutcome }) {
+  const config = OUTCOME_STYLES[outcome.status];
+  const Icon = config.icon;
+  return (
+    <section
+      aria-labelledby="outcome-heading"
+      className={cn("rounded-lg border p-4", config.wrap)}
+    >
+      <div className="flex items-start gap-3">
+        <Icon className={cn("mt-0.5 h-5 w-5 flex-shrink-0", config.icon_color)} aria-hidden="true" />
+        <div>
+          <h2 id="outcome-heading" className={cn("text-sm font-semibold", config.title_color)}>
+            {outcome.label}
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted">{outcome.detail}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const OUTCOME_STYLES: Record<
+  TaskOutcome["status"],
+  {
+    icon: typeof CheckCircle2;
+    wrap: string;
+    icon_color: string;
+    title_color: string;
+  }
+> = {
+  success: {
+    icon: CheckCircle2,
+    wrap: "border-emerald-400/30 bg-emerald-400/5",
+    icon_color: "text-emerald-400",
+    title_color: "text-emerald-100",
+  },
+  partial: {
+    icon: CircleDashed,
+    wrap: "border-amber-400/30 bg-amber-400/5",
+    icon_color: "text-amber-400",
+    title_color: "text-amber-100",
+  },
+  failure: {
+    icon: XCircle,
+    wrap: "border-red-400/30 bg-red-400/5",
+    icon_color: "text-red-400",
+    title_color: "text-red-100",
+  },
+  not_evaluated: {
+    icon: AlertCircle,
+    wrap: "border-border bg-panelAlt",
+    icon_color: "text-muted",
+    title_color: "text-text",
+  },
+};

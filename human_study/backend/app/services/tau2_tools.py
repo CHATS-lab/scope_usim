@@ -102,3 +102,124 @@ def parse_tool_arguments(raw: str) -> dict[str, Any]:
 def instruction_from_task(task: Any) -> str:
     """Produce a human-readable, Sim2Real-style instruction for the right panel."""
     return str(task.user_scenario).strip()
+
+
+def evaluate_completed_session(
+    split: str,
+    task_id: str,
+    turns: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Run tau2-bench's evaluator against a completed conversation.
+
+    Args:
+        split: "retail" or "airline".
+        task_id: the tau2 task id.
+        turns: a list of OpenAI-format message dicts in order. Must include
+            assistant tool_calls and tool results.
+
+    Returns:
+        {success: bool, reward: float, breakdown: dict, reason: str}.
+        If tau2 evaluator is unavailable or fails, returns success=False with
+        a descriptive reason.
+    """
+    if not TAU2_AVAILABLE:
+        return {
+            "success": False,
+            "reward": 0.0,
+            "breakdown": {},
+            "reason": "tau2-bench not available on the backend.",
+        }
+    try:
+        from tau2.data_model.message import (
+            AssistantMessage,
+            ToolCall as Tau2ToolCall,
+            ToolMessage as Tau2ToolMessage,
+            UserMessage,
+        )
+        from tau2.data_model.simulation import SimulationRun, TerminationReason
+        from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
+        from tau2.utils.utils import get_now
+    except Exception as e:  # noqa: BLE001
+        return {
+            "success": False,
+            "reward": 0.0,
+            "breakdown": {},
+            "reason": f"tau2 evaluator import failed: {e}",
+        }
+
+    # Look up the Task so we have evaluation_criteria.
+    _, get_tasks = _domain_env_factory(split)
+    tasks = get_tasks()
+    matches = [t for t in tasks if t.id == task_id]
+    if not matches:
+        return {
+            "success": False,
+            "reward": 0.0,
+            "breakdown": {},
+            "reason": f"tau2 task id {task_id!r} not found",
+        }
+    task = matches[0]
+
+    tau2_msgs: list[Any] = []
+    for m in turns:
+        role = m.get("role")
+        if role == "user":
+            tau2_msgs.append(UserMessage(content=m.get("content")))
+        elif role == "assistant":
+            tool_calls = None
+            if m.get("tool_calls"):
+                tool_calls = []
+                for tc in m["tool_calls"]:
+                    fn = tc.get("function") or {}
+                    tool_calls.append(
+                        Tau2ToolCall(
+                            id=tc.get("id", ""),
+                            name=fn.get("name") or tc.get("name", ""),
+                            arguments=fn.get("arguments") or tc.get("arguments") or {},
+                            requestor="assistant",
+                        )
+                    )
+            tau2_msgs.append(
+                AssistantMessage(content=m.get("content"), tool_calls=tool_calls)
+            )
+        elif role == "tool":
+            tau2_msgs.append(
+                Tau2ToolMessage(
+                    id=m.get("tool_call_id", ""),
+                    content=m.get("content"),
+                    requestor="assistant",
+                )
+            )
+
+    try:
+        simulation = SimulationRun(
+            id="human-study",
+            task_id=task.id,
+            start_time=get_now(),
+            end_time=get_now(),
+            duration=0.0,
+            termination_reason=TerminationReason.USER_STOP,
+            messages=tau2_msgs,
+        )
+        reward_info = evaluate_simulation(
+            simulation=simulation,
+            task=task,
+            evaluation_type=EvaluationType.ALL,
+            solo_mode=False,
+            domain=split,
+        )
+        reward = float(reward_info.reward)
+        return {
+            "success": reward >= 0.999,
+            "reward": reward,
+            "breakdown": dict(getattr(reward_info, "reward_breakdown", {}) or {}),
+            "reason": "",
+        }
+    except Exception as e:  # noqa: BLE001
+        logger.exception("tau2 evaluation failed for task %s: %s", task.id, e)
+        return {
+            "success": False,
+            "reward": 0.0,
+            "breakdown": {},
+            "reason": f"evaluation error: {type(e).__name__}: {e}",
+        }

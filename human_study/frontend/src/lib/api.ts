@@ -103,6 +103,13 @@ export interface DebriefInfo {
   task_idx: number;
   turn_count: number;
   completed: boolean;
+  task_outcome: TaskOutcome;
+}
+
+export interface TaskOutcome {
+  status: "success" | "partial" | "failure" | "not_evaluated";
+  label: string;
+  detail: string;
 }
 
 export interface SurveyCompleteResponse {
