@@ -1,9 +1,11 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import Participant, SessionStatus, StudySession, TaskType
-from ..schemas import SessionStartRequest, SessionStartResponse
+from ..models import Participant, SessionStatus, StudySession, TaskType, Turn, TurnRole
+from ..schemas import ChatMessage, SessionStartRequest, SessionStartResponse
 from ..services.conditions import assign_condition
 from ..services.tasks import get_task, pick_task_for_session
 
@@ -70,3 +72,40 @@ def start_session(
         task_metadata=task.get("metadata", {}),
         resumed=False,
     )
+
+
+@router.get("/{session_id}/turns", response_model=list[ChatMessage])
+def get_turns(session_id: UUID, db: Session = Depends(get_session)) -> list[ChatMessage]:
+    """Return the full conversation history for a session so the UI can restore
+    state after a reload. Exposes the same message shape the /chat endpoints do.
+    """
+    session = db.get(StudySession, session_id)
+    if session is None:
+        raise HTTPException(404, "session not found")
+
+    turns = db.exec(
+        select(Turn).where(Turn.session_id == session.id).order_by(Turn.turn_idx)
+    ).all()
+
+    messages: list[ChatMessage] = []
+    for t in turns:
+        if t.role == TurnRole.USER:
+            messages.append(ChatMessage(role="user", content=t.content))
+        elif t.role == TurnRole.AGENT:
+            messages.append(
+                ChatMessage(
+                    role="assistant",
+                    content=t.content,
+                    tool_calls=t.tool_calls,
+                )
+            )
+        elif t.role == TurnRole.TOOL:
+            messages.append(
+                ChatMessage(
+                    role="tool",
+                    content=t.content,
+                    tool_call_id=t.tool_call_id,
+                    tool_name=t.tool_name,
+                )
+            )
+    return messages

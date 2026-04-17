@@ -56,18 +56,30 @@ export default function StudyClient() {
       return;
     }
 
-    withRetry(
-      () => api.startSession({ prolific_pid, study_id, prolific_session_id, task_type }),
-      { attempts: 3 }
-    )
-      .then((s) => {
+    (async () => {
+      try {
+        const s = await withRetry(
+          () => api.startSession({ prolific_pid, study_id, prolific_session_id, task_type }),
+          { attempts: 3 }
+        );
         setSession(s);
+        // If this is a resumed session (e.g. participant refreshed the page),
+        // pull the existing turns from the backend so the conversation feels
+        // continuous rather than starting from a blank chat.
+        if (s.resumed) {
+          try {
+            const prior = await api.getTurns(s.session_id);
+            if (prior.length > 0) setMessages(prior);
+          } catch {
+            // Non-fatal: the rest of the flow still works.
+          }
+        }
         setPhase("chatting");
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         setErrorMsg(describeError(err));
         setPhase("error");
-      });
+      }
+    })();
   }, [params]);
 
   const turnCount = useMemo(

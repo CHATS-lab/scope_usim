@@ -74,6 +74,21 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`);
+  if (!res.ok) {
+    const raw = await res.text();
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.detail === "string") throw new Error(parsed.detail);
+    } catch (e) {
+      if (e instanceof Error && e.message && e.message !== raw) throw e;
+    }
+    throw new Error(raw || `Request failed (${res.status})`);
+  }
+  return (await res.json()) as T;
+}
+
 export const api = {
   startSession: (p: {
     prolific_pid: string;
@@ -81,6 +96,9 @@ export const api = {
     prolific_session_id: string;
     task_type: TaskType;
   }) => post<SessionStartResponse>("/session/start", p),
+
+  getTurns: (session_id: string) =>
+    get<ChatMessage[]>(`/session/${session_id}/turns`),
 
   chat: (p: { session_id: string; user_message: string }) =>
     post<ChatResponse>("/chat", p),
