@@ -1,0 +1,37 @@
+diff --git a/slime/ray/rollout.py b/slime/ray/rollout.py
+index de84e10d..patch0001 100644
+--- a/slime/ray/rollout.py
++++ b/slime/ray/rollout.py
+@@ -479,6 +479,30 @@ class RolloutManager:
+             srv.num_new_engines = 0
+
+
++    def get_server_engines_and_lock(self, server_name: str):
++        """Return engines for a specific named server.
++
++        Like get_updatable_engines_and_lock() but routes to a server by name
++        instead of returning the first updatable one.  Used by dual-model
++        co-training where each training group needs to update only its own
++        model's engines.
++
++        Args:
++            server_name: Key in the sglang-config models list (e.g. "actor",
++                "opponent").
++
++        Returns:
++            (engines, lock, num_new_engines, gpu_counts, gpu_offsets)
++        """
++        srv = self.servers.get(server_name)
++        if srv is None:
++            return [], self.rollout_engine_lock, 0, [], []
++        return srv.engines, self.rollout_engine_lock, srv.num_new_engines, srv.engine_gpu_counts, srv.engine_gpu_offsets
++
++    def clear_server_num_new_engines(self, server_name: str):
++        """Clear num_new_engines for a specific named server."""
++        srv = self.servers.get(server_name)
++        if srv:
++            srv.num_new_engines = 0
++
+     def health_monitoring_pause(self) -> None:
+         for monitor in self._health_monitors:
+             monitor.pause()

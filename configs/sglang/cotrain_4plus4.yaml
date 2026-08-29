@@ -1,0 +1,29 @@
+# Co-training sglang config: 4 actor GPUs + 4 opponent GPUs
+# Used for Mode 2 (cotrain) and Mode 3 (selfplay) with Qwen3-4B-Instruct
+#
+# Usage:
+#   python train_cotrain_slime.py \
+#     --training-mode cotrain \
+#     --sglang-config configs/sglang/cotrain_4plus4.yaml \
+#     --hf-checkpoint /path/to/Qwen3-4B-Instruct-2507 \
+#     --rollout-num-gpus 8 \
+#     ...
+#
+# The "actor" model receives training weight updates from the actor training group.
+# The "opponent" model receives training weight updates from the opponent training group.
+# Both models are trainable — the cotrain_loop manages dual training groups.
+
+sglang:
+  - name: actor
+    update_weights: true
+    engine_groups:
+      - worker_type: regular
+        num_gpus: 4
+        num_gpus_per_engine: 4
+
+  - name: opponent
+    update_weights: true
+    engine_groups:
+      - worker_type: regular
+        num_gpus: 4
+        num_gpus_per_engine: 4

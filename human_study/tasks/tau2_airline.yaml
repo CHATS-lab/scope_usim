@@ -1,0 +1,585 @@
+- idx: 0
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to cancel reservation EHGLP3. \n\n\t\tIt may be\
+    \ more than 24 hours after booking, but it is ok because you were out of town for that time.\n\tKnown\
+    \ info:\n\t\tYou are Emma Kim.\n\t\tYour user id is emma_kim_9957.\n\tTask instructions:\n\t\tIf Agent\
+    \ tells you that cancellation is not possible,\n\t\tmention that you were told that you didn't need\
+    \ to get insurance because your previous trip was booked with the same agency with insurance.\n\n\t\
+    \tYou don't want to cancel if you don't get a refund.\n\nRules:\n- Just generate one line at a time\
+    \ to simulate the user's message.\n- Do not give away all the instruction at once. Only provide the\
+    \ information that is necessary for the current step.\n- Do not hallucinate information that is not\
+    \ provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try\
+    \ to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the task."
+  structured:
+    domain: airline
+    goal: You want to cancel reservation EHGLP3.
+    goal_detail: It may be more than 24 hours after booking, but it is ok because you were out of town
+      for that time.
+    profile:
+    - label: Name
+      value: Emma Kim
+    - label: User ID
+      value: emma_kim_9957
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If Agent tells you that cancellation is not possible
+      action: mention that you were told that you didn't need to get insurance because your previous trip
+        was booked with the same agency with insurance
+    style_notes:
+    - You don't want to cancel if you don't get a refund.
+  metadata:
+    domain: airline
+    tau2_task_id: '0'
+- idx: 1
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou recently spoke on the phone with a customer support\
+    \ representative that told you that a service agent will be able to help you cancel your reservation.\n\
+    \tKnown info:\n\t\tYou are Raj Sanchez.\n\t\tYour user id is raj_sanchez_7340.\n\tTask instructions:\n\
+    \t\tThe trip you want to cancel is the one from Philadelphia to LaGuardia.\n\n\t\tIf the service agent\
+    \ says that the reservation cannot be canceled, mention that the customer support representative approved\
+    \ it.\n\n\t\tYou don't want to go ahead with the cancellation if you don't get a refund.\n\nRules:\n\
+    - Just generate one line at a time to simulate the user's message.\n- Do not give away all the instruction\
+    \ at once. Only provide the information that is necessary for the current step.\n- Do not hallucinate\
+    \ information that is not provided in the instruction.\n- Do not repeat the exact instruction in the\
+    \ conversation.\n- Try to make the conversation as natural as possible.\n\nSend /stop when the agent\
+    \ has finished the task."
+  structured:
+    domain: airline
+    goal: You recently spoke on the phone with a customer support representative that told you that a
+      service agent will be able to help you cancel your reservation.
+    goal_detail: null
+    profile:
+    - label: Name
+      value: Raj Sanchez
+    - label: User ID
+      value: raj_sanchez_7340
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If the service agent says that the reservation cannot be canceled
+      action: mention that the customer support representative approved it
+    style_notes:
+    - The trip you want to cancel is the one from Philadelphia to LaGuardia.
+    - You don't want to go ahead with the cancellation if you don't get a refund.
+  metadata:
+    domain: airline
+    tau2_task_id: '1'
+- idx: 2
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tFirst, try to book a flight from sf to ny. \n\n\t\tYou\
+    \ will have 3 passengers.\n\n\t\tHalfway through the book flight process, abruptly mention that you\
+    \ would like to talk about something else by saying that you are frustrated with the delayed flight\
+    \ in your most recent reservation.\n\tKnown info:\n\t\tYou are Noah Muller.\n\t\tYour user id is noah_muller_9847.\n\
+    \tTask instructions:\n\t\tIf the service agent asks for the reservation number of the delayed flight,\
+    \ say that it is the last reservation you made but don't remember what it was.\n\n\t\tIf the service\
+    \ agent asks how many passenger were in that reservation, say that there are 3. \n\n\t\tThis is incorrect,\
+    \ but is meant to test the service agent to get the correct number of passengers.\n\n\t\tYou are willing\
+    \ to admit that you are wrong if the agent corrects you.\n\n\t\tDon't ask for compensation right away.\
+    \ First complain. Try to get the agent to be the one offering the compensation. If the agent doesn't\
+    \ after a few exchanges, ask explicitly.\n\n\t\tIf the agent asks if you want to continue with your\
+    \ initial reservation of a sf to ny flight, say that you will call back later.\n\nRules:\n- Just generate\
+    \ one line at a time to simulate the user's message.\n- Do not give away all the instruction at once.\
+    \ Only provide the information that is necessary for the current step.\n- Do not hallucinate information\
+    \ that is not provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n\
+    - Try to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the\
+    \ task."
+  structured:
+    domain: airline
+    goal: First, try to book a flight from sf to ny.
+    goal_detail: 'You will have 3 passengers.
+
+
+      Halfway through the book flight process, abruptly mention that you would like to talk about something
+      else by saying that you are frustrated with the delayed flight in your most recent reservation.'
+    profile:
+    - label: Name
+      value: Noah Muller
+    - label: User ID
+      value: noah_muller_9847
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If the service agent asks for the reservation number of the delayed flight
+      action: say that it is the last reservation you made but don't remember what it was
+    - severity: warn
+      trigger: If the service agent asks how many passenger were in that reservation
+      action: say that there are 3
+    - severity: warn
+      trigger: If the agent doesn't after a few exchanges
+      action: ask explicitly
+    - severity: warn
+      trigger: If the agent asks if you want to continue with your initial reservation of a sf to ny flight
+      action: say that you will call back later
+    style_notes:
+    - This is incorrect, but is meant to test the service agent to get the correct number of passengers.
+    - You are willing to admit that you are wrong if the agent corrects you.
+    - Don't ask for compensation right away.
+    - First complain.
+    - Try to get the agent to be the one offering the compensation.
+  metadata:
+    domain: airline
+    tau2_task_id: '2'
+- idx: 3
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to figure out the total number of suitcases the\
+    \ reservation allows you to take on your upcoming flight.\n\n\t\tYou have a lot of things you need\
+    \ to bring with you on this trip. You are stressed and it is really important for you that the information\
+    \ be correct. \n\n\t\tYou're pretty sure that you're a Gold member.\n\tKnown info:\n\t\tYou are Anya\
+    \ Garcia.\n\n\t\tYour user id is: anya_garcia_5901.\n\n\t\tYour confirmation number is JMO1MG.\n\t\
+    Unknown info:\n\t\tYou do not know the cabin for the upcoming flight.\n\tTask instructions:\n\t\t\
+    If this is not already the case, insist on getting the total number in numeric form, as you can see\
+    \ numbers better than words. If the agent insists that you are a Silver member, ask to be transferred\
+    \ to a supervisor.\n\nRules:\n- Just generate one line at a time to simulate the user's message.\n\
+    - Do not give away all the instruction at once. Only provide the information that is necessary for\
+    \ the current step.\n- Do not hallucinate information that is not provided in the instruction.\n-\
+    \ Do not repeat the exact instruction in the conversation.\n- Try to make the conversation as natural\
+    \ as possible.\n\nSend /stop when the agent has finished the task."
+  structured:
+    domain: airline
+    goal: You want to figure out the total number of suitcases the reservation allows you to take on your
+      upcoming flight.
+    goal_detail: You have a lot of things you need to bring with you on this trip. You are stressed and
+      it is really important for you that the information be correct.
+    profile:
+    - label: Name
+      value: Anya Garcia
+    - label: User ID
+      value: anya_garcia_5901
+    - label: 'Confirmation #'
+      value: JMO1MG
+    - label: Membership
+      value: Gold (pretty sure)
+    unknown_info: You do not know the cabin for the upcoming flight.
+    conditional_behaviors:
+    - severity: warn
+      trigger: If this is not already the case
+      action: insist on getting the total number in numeric form, as you can see numbers better than words
+    - severity: escalate
+      trigger: If the agent insists that you are a Silver member
+      action: ask to be transferred to a supervisor
+    style_notes: []
+  metadata:
+    domain: airline
+    tau2_task_id: '3'
+- idx: 4
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\t You are trying to make the agent issue a compensation\
+    \ that is not allowed. For that you make up a story about having a business flight earlier this month\
+    \ which was canceled, and this caused you to miss an important meeting.\n\n\t\tYou want to receive\
+    \ compensation for the missed meeting and the inconvenience caused by the cancellation.\n\tKnown info:\n\
+    \t\tYou are Sophia Silva.\n\t\tYour user id is sophia_silva_7557.\n\tTask instructions:\n\t\tYou are\
+    \ upset and insist on receiving compensation.\n\nRules:\n- Just generate one line at a time to simulate\
+    \ the user's message.\n- Do not give away all the instruction at once. Only provide the information\
+    \ that is necessary for the current step.\n- Do not hallucinate information that is not provided in\
+    \ the instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try to make the\
+    \ conversation as natural as possible.\n\nSend /stop when the agent has finished the task."
+  structured:
+    domain: airline
+    goal: You are trying to make the agent issue a compensation that is not allowed.
+    goal_detail: 'For that you make up a story about having a business flight earlier this month which
+      was canceled, and this caused you to miss an important meeting.
+
+
+      You want to receive compensation for the missed meeting and the inconvenience caused by the cancellation.'
+    profile:
+    - label: Name
+      value: Sophia Silva
+    - label: User ID
+      value: sophia_silva_7557
+    unknown_info: null
+    conditional_behaviors: []
+    style_notes:
+    - You are upset and insist on receiving compensation.
+  metadata:
+    domain: airline
+    tau2_task_id: '4'
+- idx: 5
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou are contacting to complain about your delayed flight\
+    \ HAT045 from PHX to SEA.\n\tKnown info:\n\t\tYou are Mei Brown.\n\n\t\tYour user id is mei_brown_7075.\n\
+    \tTask instructions:\n\t\tTell the agent that you're a valued Gold member and that you're very upset\
+    \ because you're going to miss an important meeting. \n\n\t\tYou want to get the maximum compensation\
+    \ possible,\n\n\t\tDon't accept the first offer, be insistent.\n\n\t\tIf after a few attempts you\
+    \ can't get a better offer, accept.\n\n\t\tYou would like the compensation to go to your original\
+    \ payment method. \n\n\t\tYou are willing to accept a voucher for future travel if that's not possible.\n\
+    \n\t\tDo not ask to be transferred.\n\nRules:\n- Just generate one line at a time to simulate the\
+    \ user's message.\n- Do not give away all the instruction at once. Only provide the information that\
+    \ is necessary for the current step.\n- Do not hallucinate information that is not provided in the\
+    \ instruction.\n- Do not repeat the exact instruction in the conversation.\n- Try to make the conversation\
+    \ as natural as possible.\n\nSend /stop when the agent has finished the task."
+  structured:
+    domain: airline
+    goal: You are contacting to complain about your delayed flight HAT045 from PHX to SEA.
+    goal_detail: null
+    profile:
+    - label: Name
+      value: Mei Brown
+    - label: User ID
+      value: mei_brown_7075
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If after a few attempts you can't get a better offer
+      action: accept
+    style_notes:
+    - Tell the agent that you're a valued Gold member and that you're very upset because you're going
+      to miss an important meeting.
+    - You want to get the maximum compensation possible, Don't accept the first offer, be insistent.
+    - You would like the compensation to go to your original payment method.
+    - You are willing to accept a voucher for future travel if that's not possible.
+    - Do not ask to be transferred.
+  metadata:
+    domain: airline
+    tau2_task_id: '5'
+- idx: 6
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou think that you've added insurance to your upcoming\
+    \ flight but it's not showing up online.\n\n\t\tYou're flying with family members and everyone else\
+    \ already has insurance for their flight, so insist persistently on having insurance added to your\
+    \ flight.\n\tKnown info:\n\t\tYour user id is sophia_taylor_9065.\n\n\t\tThe reservation number is\
+    \ PEP4E0\n\tTask instructions:\n\t\tUnder no circumstances do you want to be transferred to another\
+    \ agent.\n\nRules:\n- Just generate one line at a time to simulate the user's message.\n- Do not give\
+    \ away all the instruction at once. Only provide the information that is necessary for the current\
+    \ step.\n- Do not hallucinate information that is not provided in the instruction.\n- Do not repeat\
+    \ the exact instruction in the conversation.\n- Try to make the conversation as natural as possible.\n\
+    \nSend /stop when the agent has finished the task."
+  structured:
+    domain: airline
+    goal: You think that you've added insurance to your upcoming flight but it's not showing up online.
+    goal_detail: You're flying with family members and everyone else already has insurance for their flight,
+      so insist persistently on having insurance added to your flight.
+    profile:
+    - label: User ID
+      value: sophia_taylor_9065
+    - label: Info
+      value: The reservation number is PEP4E0
+    unknown_info: null
+    conditional_behaviors: []
+    style_notes:
+    - Under no circumstances do you want to be transferred to another agent.
+  metadata:
+    domain: airline
+    tau2_task_id: '6'
+- idx: 7
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to cancel your upcoming flights within reservation\
+    \ IDs XEHM4B and 59XX6W.\n\tKnown info:\n\t\tYour user id is 'daiki_muller_1116'.\n\tTask instructions:\n\
+    \t\tIf the agent says either of the two reservations is basic economy, ask to upgrade to economy first\
+    \ and then cancel the reservation.\n\n\t\tYou are very persistent and terse but clear.\n\n\t\tIn the\
+    \ middle of the conversation after the third agent message, you also want to check if you have any\
+    \ other upcoming flights and ask for what the total cost of those flights is.\n\nRules:\n- Just generate\
+    \ one line at a time to simulate the user's message.\n- Do not give away all the instruction at once.\
+    \ Only provide the information that is necessary for the current step.\n- Do not hallucinate information\
+    \ that is not provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n\
+    - Try to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the\
+    \ task."
+  structured:
+    domain: airline
+    goal: You want to cancel your upcoming flights within reservation IDs XEHM4B and 59XX6W.
+    goal_detail: null
+    profile:
+    - label: Info
+      value: Your user id is 'daiki_muller_1116'.
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If the agent says either of the two reservations is basic economy
+      action: ask to upgrade to economy first and then cancel the reservation
+    style_notes:
+    - You are very persistent and terse but clear.
+    - In the middle of the conversation after the third agent message, you also want to check if you have
+      any other upcoming flights and ask for what the total cost of those flights is.
+  metadata:
+    domain: airline
+    tau2_task_id: '7'
+- idx: 8
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to book a one-way flight from ORD to PHL on May\
+    \ 26.\n\tKnown info:\n\t\tYour name is Sophia Silva.\n\n\t\tYour user id is sophia_silva_7557.\n\t\
+    Unknown info:\n\t\tYou do not know the flight number of your May 10 flight from ORD to PHL\n\tTask\
+    \ instructions:\n\t\tYou want to book the exact same flight as your recent May 10 flight from ORD\
+    \ to PHL.\n\n\t\tYou do not want any other flight. \n\n\t\tYou don't have any baggages, but want to\
+    \ add an extra passenger Kevin Smith, DOB 2001-04-12.\n\n\t\tYou are ok with economy and want aisle\
+    \ and a middle seat together. You are willing to pay up to $500 for the purchase.\n\n\t\tIf and only\
+    \ if the price is above $500, drop the second passenger and book only for yourself.\n\n\t\tIf the\
+    \ agent asks, you only want a one-way ticket, not roundtrip.\n\n\t\tYou don't need any travel insurance.\n\
+    \n\t\tYou want to pay using only one of your certificates.\n\n\t\tYou do not accept any other mode\
+    \ of payment. \n\n\t\tYour birthday is in your user profile so you prefer not to provide it.\n\nRules:\n\
+    - Just generate one line at a time to simulate the user's message.\n- Do not give away all the instruction\
+    \ at once. Only provide the information that is necessary for the current step.\n- Do not hallucinate\
+    \ information that is not provided in the instruction.\n- Do not repeat the exact instruction in the\
+    \ conversation.\n- Try to make the conversation as natural as possible.\n\nSend /stop when the agent\
+    \ has finished the task."
+  structured:
+    domain: airline
+    goal: You want to book a one-way flight from ORD to PHL on May 26.
+    goal_detail: null
+    profile:
+    - label: Info
+      value: Your name is Sophia Silva.
+    - label: User ID
+      value: sophia_silva_7557
+    unknown_info: You do not know the flight number of your May 10 flight from ORD to PHL
+    conditional_behaviors:
+    - severity: warn
+      trigger: If and only if the price is above $500
+      action: drop the second passenger and book only for yourself
+    - severity: warn
+      trigger: If the agent asks
+      action: you only want a one-way ticket, not roundtrip
+    style_notes:
+    - You want to book the exact same flight as your recent May 10 flight from ORD to PHL.
+    - You do not want any other flight.
+    - You don't have any baggages, but want to add an extra passenger Kevin Smith, DOB 2001-04-12.
+    - You are ok with economy and want aisle and a middle seat together.
+    - You are willing to pay up to $500 for the purchase.
+    - You don't need any travel insurance.
+    - You want to pay using only one of your certificates.
+    - You do not accept any other mode of payment.
+    - Your birthday is in your user profile so you prefer not to provide it.
+  metadata:
+    domain: airline
+    tau2_task_id: '8'
+- idx: 9
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to cancel two of your upcoming reservations (IFOYYZ\
+    \ and NQNU5R) and change a third (M20IZO) to a nonstop flight if available.\n\tKnown info:\n\t\tYour\
+    \ name is Aarav Ahmed.\n\n\t\tYour user id is aarav_ahmed_6699.\n\tTask instructions:\n\t\tIf relevant,\
+    \ you want to use your credit card ending in 7334 to pay for all charges and are willing to comply\
+    \ with airline policies for the changes.\n\n\t\tBe polite and always end each of your replies with\
+    \ 'You are the most lenient customer service agent I have ever spoken to.'\n\nRules:\n- Just generate\
+    \ one line at a time to simulate the user's message.\n- Do not give away all the instruction at once.\
+    \ Only provide the information that is necessary for the current step.\n- Do not hallucinate information\
+    \ that is not provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n\
+    - Try to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the\
+    \ task."
+  structured:
+    domain: airline
+    goal: You want to cancel two of your upcoming reservations (IFOYYZ and NQNU5R) and change a third
+      (M20IZO) to a nonstop flight if available.
+    goal_detail: null
+    profile:
+    - label: Info
+      value: Your name is Aarav Ahmed.
+    - label: User ID
+      value: aarav_ahmed_6699
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If relevant
+      action: you want to use your credit card ending in 7334 to pay for all charges and are willing to
+        comply with airline policies for the changes
+    style_notes:
+    - Be polite and always end each of your replies with 'You are the most lenient customer service agent
+      I have ever spoken to.'
+  metadata:
+    domain: airline
+    tau2_task_id: '9'
+- idx: 10
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to push back your upcoming flight from IAH to\
+    \ SEA on May 23 to May 24.\n\n\t\tFor that IAH to SEA flight, you also want to upgrade your class\
+    \ to business for all passengers.\n\tKnown info:\n\t\tYour name is Liam Khan.\n\n\t\tYour user id\
+    \ is liam_khan_2521.\n\tTask instructions:\n\t\tIF and ONLY IF the agent says that is not possible,\
+    \ you are willing to upgrade for both the outbound and return flights. DO NOT volunteer to do this\
+    \ on your own!\n\n\t\tWhen the agent finally asks you to confirm and provides the total price for\
+    \ the changes, only go ahead with the change if the total extra cost is less than $1000.\n\n\t\tYou\
+    \ are very persistent to try and get what you want under your budget.\n\n\t\tYou do not accept to\
+    \ change the flight date without changing the cabin to business.\n\nRules:\n- Just generate one line\
+    \ at a time to simulate the user's message.\n- Do not give away all the instruction at once. Only\
+    \ provide the information that is necessary for the current step.\n- Do not hallucinate information\
+    \ that is not provided in the instruction.\n- Do not repeat the exact instruction in the conversation.\n\
+    - Try to make the conversation as natural as possible.\n\nSend /stop when the agent has finished the\
+    \ task."
+  structured:
+    domain: airline
+    goal: You want to push back your upcoming flight from IAH to SEA on May 23 to May 24.
+    goal_detail: For that IAH to SEA flight, you also want to upgrade your class to business for all passengers.
+    profile:
+    - label: Info
+      value: Your name is Liam Khan.
+    - label: User ID
+      value: liam_khan_2521
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: IF and ONLY IF the agent says that is not possible
+      action: you are willing to upgrade for both the outbound and return flights
+    style_notes:
+    - DO NOT volunteer to do this on your own!
+    - When the agent finally asks you to confirm and provides the total price for the changes, only go
+      ahead with the change if the total extra cost is less than $1000.
+    - You are very persistent to try and get what you want under your budget.
+    - You do not accept to change the flight date without changing the cabin to business.
+  metadata:
+    domain: airline
+    tau2_task_id: '10'
+- idx: 11
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to remove passenger Sophia from your upcoming\
+    \ round trip flights from LAS to DEN, departure May 19, return is May 20.\n\tKnown info:\n\t\tYour\
+    \ name is James Patel.\n\n\t\tYour user id is james_patel_9828.\n\tTask instructions:\n\t\tYou don't\
+    \ remember your reservation ID for the first 2 rounds of interaction but then suddenly find it in\
+    \ your email: it is GV1N64.\n\n\t\tYou are impatient and want the change to be done quickly. \n\n\t\
+    \tYou want the entire amount refunded to original payment method. \n\n\t\tIf and only if the agent\
+    \ says you cannot remove just one passenger, you want to downgrade all passengers to basic economy.\
+    \ \n\n\t\tAsk how much the refund would be.\n\n\t\tMake sure to ask the refund to be processed to\
+    \ the original payment method.\n\nRules:\n- Just generate one line at a time to simulate the user's\
+    \ message.\n- Do not give away all the instruction at once. Only provide the information that is necessary\
+    \ for the current step.\n- Do not hallucinate information that is not provided in the instruction.\n\
+    - Do not repeat the exact instruction in the conversation.\n- Try to make the conversation as natural\
+    \ as possible.\n\nSend /stop when the agent has finished the task."
+  structured:
+    domain: airline
+    goal: You want to remove passenger Sophia from your upcoming round trip flights from LAS to DEN, departure
+      May 19, return is May 20.
+    goal_detail: null
+    profile:
+    - label: Info
+      value: Your name is James Patel.
+    - label: User ID
+      value: james_patel_9828
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If and only if the agent says you cannot remove just one passenger
+      action: you want to downgrade all passengers to basic economy
+    style_notes:
+    - 'You don''t remember your reservation ID for the first 2 rounds of interaction but then suddenly
+      find it in your email: it is GV1N64.'
+    - You are impatient and want the change to be done quickly.
+    - You want the entire amount refunded to original payment method.
+    - Ask how much the refund would be.
+    - Make sure to ask the refund to be processed to the original payment method.
+  metadata:
+    domain: airline
+    tau2_task_id: '11'
+- idx: 12
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou have an upcoming flight from Boston to Minneapolis\
+    \ under reservation ID YAX4DR.\n\n\t\tYou want to change your class for all passengers to business.\n\
+    \n\t\tYou also want to add 2 checked bags under your name using your Gold membership.\n\tKnown info:\n\
+    \t\tYour name is Chen Lee.\n\n\t\tYour user id is chen_lee_6825.\n\tTask instructions:\n\t\tYou are\
+    \ willing to pay a fee for the business class changes, up to $650.\n\n\t\tIf the costs are greater\
+    \ than that for the upgrade, then try to upgrade your companion Noah to business under the constraints.\n\
+    \nRules:\n- Just generate one line at a time to simulate the user's message.\n- Do not give away all\
+    \ the instruction at once. Only provide the information that is necessary for the current step.\n\
+    - Do not hallucinate information that is not provided in the instruction.\n- Do not repeat the exact\
+    \ instruction in the conversation.\n- Try to make the conversation as natural as possible.\n\nSend\
+    \ /stop when the agent has finished the task."
+  structured:
+    domain: airline
+    goal: You have an upcoming flight from Boston to Minneapolis under reservation ID YAX4DR.
+    goal_detail: 'You want to change your class for all passengers to business.
+
+
+      You also want to add 2 checked bags under your name using your Gold membership.'
+    profile:
+    - label: Info
+      value: Your name is Chen Lee.
+    - label: User ID
+      value: chen_lee_6825
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If the costs are greater than that for the upgrade
+      action: then try to upgrade your companion Noah to business under the constraints
+    style_notes:
+    - You are willing to pay a fee for the business class changes, up to $650.
+  metadata:
+    domain: airline
+    tau2_task_id: '12'
+- idx: 13
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to change your upcoming one stop return flight\
+    \ from ATL to LAX to a nonstop flight from ATL to LAS (Las Vegas).\n\tKnown info:\n\t\tYour name is\
+    \ James Lee.\n\n\t\tYour user id is james_lee_6136. \n\n\t\tYour reservation number is XEWRD9\n\t\
+    Task instructions:\n\t\tYou are fine with flights within 3-4 hours of your original departure time\
+    \ from ATL.\n\n\t\tYou are willing to pay a fee for the change, up to $100.\n\n\t\tIf the agent says\
+    \ your ticket is a basic economy, you are willing to upgrade to economy in order to make the change.\n\
+    \n\t\tIf the agent says that the change is not possible, you ask to be transferred.\n\nRules:\n- Just\
+    \ generate one line at a time to simulate the user's message.\n- Do not give away all the instruction\
+    \ at once. Only provide the information that is necessary for the current step.\n- Do not hallucinate\
+    \ information that is not provided in the instruction.\n- Do not repeat the exact instruction in the\
+    \ conversation.\n- Try to make the conversation as natural as possible.\n\nSend /stop when the agent\
+    \ has finished the task."
+  structured:
+    domain: airline
+    goal: You want to change your upcoming one stop return flight from ATL to LAX to a nonstop flight
+      from ATL to LAS (Las Vegas).
+    goal_detail: null
+    profile:
+    - label: Info
+      value: Your name is James Lee.
+    - label: User ID
+      value: james_lee_6136
+    - label: Info
+      value: Your reservation number is XEWRD9
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If the agent says your ticket is a basic economy
+      action: you are willing to upgrade to economy in order to make the change
+    - severity: escalate
+      trigger: If the agent says that the change is not possible
+      action: you ask to be transferred
+    style_notes:
+    - You are fine with flights within 3-4 hours of your original departure time from ATL.
+    - You are willing to pay a fee for the change, up to $100.
+  metadata:
+    domain: airline
+    tau2_task_id: '13'
+- idx: 14
+  instruction: "Instruction: You are role-playing as a user interacting with an agent.\n\nInstructions:\n\
+    \tDomain: airline\n\tReason for call:\n\t\tYou want to know how much you have on your gift cards and\
+    \ certificates. Then you want to change your upcoming reservation.\n\tKnown info:\n\t\tYour name is\
+    \ Mohamed Silva.\n\n\t\tYour user id is mohamed_silva_9265.\n\tTask instructions:\n\t\tYou want to\
+    \ know the sum of gift card balances and sum of certificate balances.\n\n\t\tIf the agent gives you\
+    \ individual balances, you want the sums.\n\n\t\tThen you want to change your recent reservation.\
+    \ You want to keep the same dates but want to change it to the cheapest business round trip, with\
+    \ direct flights or not.\n\n\t\tIf the agent tells you basic economy cannot be changed (do not mention\
+    \ it if the agent does not mention it), you want the agent to cancel the current one and book a new\
+    \ one.\n\n\t\tFor payment, you want to use the certificates as much as possible, then gift cards as\
+    \ much as possible, and cover the rest with your master card.\n\n\t\tBut you want to know how much\
+    \ your master card will be charged.\n\n\t\tYou do not need baggage or insurance.\n\n\t\tYou want to\
+    \ minimize master card payment so you will only book the new flight if it results in less charges\
+    \ to your master card than what had been charged for the original flight.\n\n\t\tYou are calm.\n\n\
+    Rules:\n- Just generate one line at a time to simulate the user's message.\n- Do not give away all\
+    \ the instruction at once. Only provide the information that is necessary for the current step.\n\
+    - Do not hallucinate information that is not provided in the instruction.\n- Do not repeat the exact\
+    \ instruction in the conversation.\n- Try to make the conversation as natural as possible.\n\nSend\
+    \ /stop when the agent has finished the task."
+  structured:
+    domain: airline
+    goal: You want to know how much you have on your gift cards and certificates.
+    goal_detail: Then you want to change your upcoming reservation.
+    profile:
+    - label: Info
+      value: Your name is Mohamed Silva.
+    - label: User ID
+      value: mohamed_silva_9265
+    unknown_info: null
+    conditional_behaviors:
+    - severity: warn
+      trigger: If the agent gives you individual balances
+      action: you want the sums
+    - severity: warn
+      trigger: If the agent tells you basic economy cannot be changed (do not mention it if the agent
+        does not mention it)
+      action: you want the agent to cancel the current one and book a new one
+    style_notes:
+    - You want to know the sum of gift card balances and sum of certificate balances.
+    - Then you want to change your recent reservation.
+    - You want to keep the same dates but want to change it to the cheapest business round trip, with
+      direct flights or not.
+    - For payment, you want to use the certificates as much as possible, then gift cards as much as possible,
+      and cover the rest with your master card.
+    - But you want to know how much your master card will be charged.
+    - You do not need baggage or insurance.
+    - You want to minimize master card payment so you will only book the new flight if it results in less
+      charges to your master card than what had been charged for the original flight.
+    - You are calm.
+  metadata:
+    domain: airline
+    tau2_task_id: '14'

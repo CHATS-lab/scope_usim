@@ -1,0 +1,18 @@
+# Build context is the human_study/ root (see docker-compose.yml).
+FROM node:20-alpine AS builder
+WORKDIR /app
+# Bake the backend URL into the build so next.config.mjs rewrites resolve at
+# runtime. Defaults to the docker-compose service name.
+ARG NEXT_PUBLIC_BACKEND_URL=http://backend:8000
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/. ./
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app ./
+EXPOSE 3000
+CMD ["npm", "run", "start"]

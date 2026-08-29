@@ -1,0 +1,56 @@
+# OS and editor state
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local coding-agent state
+/.claude/
+/.worktrees/
+
+# Python caches and build products
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+build/
+dist/
+*.so
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+.venv/
+venv/
+
+# JavaScript dependencies and build products
+node_modules/
+.next/
+out/
+
+# Experiment trackers, outputs, and service state
+wandb/
+tillicum/
+/results/
+/human_study/results/
+/human_study/analysis/
+/human_study/screenshots/
+/human_study/deploy/.env.local
+/cmd/slime/**/CRASH_LOG_*.md
+
+# Local research checkouts that are not registered submodules
+/DrMAS/
+/external/mini-swe-agent/
+/external/persuasion_simulation/

@@ -1,0 +1,27 @@
+# Co-training sglang config: 3 actor rollout GPUs + 3 opponent rollout GPUs
+# Used for Mode 2 (cotrain) and Mode 3 (selfplay) on 8 GPU machines
+# Each model gets TP=1 with 3 engine replicas for throughput.
+#
+# GPU layout (8 GPUs total):
+#   GPUs 0-1: Training workers (Megatron, single model, CP=2)
+#   GPUs 2-4: Actor SGLang engines (3 replicas, TP=1)
+#   GPUs 5-7: Opponent SGLang engines (3 replicas, TP=1)
+#
+# Actor engines receive NCCL weight updates from the training group.
+# Opponent engines receive periodic disk-based weight updates.
+# Both models share the same architecture (self-play / same-model cotrain).
+
+sglang:
+  - name: actor
+    update_weights: true
+    engine_groups:
+      - worker_type: regular
+        num_gpus: 3
+        num_gpus_per_engine: 1
+
+  - name: opponent
+    update_weights: false
+    engine_groups:
+      - worker_type: regular
+        num_gpus: 3
+        num_gpus_per_engine: 1

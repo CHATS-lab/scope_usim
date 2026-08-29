@@ -1,0 +1,12 @@
+[submodule "slime"]
+	path = slime
+	url = https://github.com/THUDM/slime.git
+[submodule "tinker-cookbook"]
+	path = tinker-cookbook
+	url = https://github.com/thinking-machines-lab/tinker-cookbook.git
+[submodule "external/tau2-bench"]
+	path = external/tau2-bench
+	url = https://github.com/sierra-research/tau2-bench.git
+[submodule "external/CooperBench"]
+	path = external/CooperBench
+	url = https://github.com/simonucl/CooperBench.git

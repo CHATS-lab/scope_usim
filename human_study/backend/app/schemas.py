@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+from pydantic import BaseModel
+
+from .models import Condition, SessionStatus, StudyVariant, TaskType
+
+
+class SessionStartRequest(BaseModel):
+    prolific_pid: str
+    study_id: str
+    prolific_session_id: str
+    task_type: TaskType  # chosen by the researcher when building the Prolific link
+    variant: StudyVariant = StudyVariant.V2
+
+
+class SessionStartResponse(BaseModel):
+    session_id: UUID
+    condition: Condition
+    task_type: TaskType
+    task_split: str
+    task_idx: int
+    task_instruction: str
+    task_metadata: dict[str, Any]
+    # Parsed/structured task fields for the v2 instruction panel. None for
+    # task types that don't have structured data (e.g. P4G).
+    task_structured: dict[str, Any] | None = None
+    variant: StudyVariant = StudyVariant.V2
+    resumed: bool = False
+    # When a PID that has already finished comes back (refresh / re-open link),
+    # we return the existing completion info instead of erroring so they can
+    # still copy their Prolific code.
+    already_completed: bool = False
+    completion_code: str | None = None
+    # When a SURVEY_DONE session re-opens its link, the resume flow also needs
+    # the Prolific-issued code and the redirect URL so the debrief panel can
+    # auto-redirect rather than showing the internal HMAC code.
+    prolific_completion_code: str | None = None
+    prolific_redirect_url: str | None = None
+    debrief: "DebriefInfo | None" = None
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    tool_name: str | None = None
+
+
+class ChatRequest(BaseModel):
+    session_id: UUID
+    user_message: str
+
+
+class ChatResponse(BaseModel):
+    messages: list[ChatMessage]  # new turns appended in this request (agent + tool turns)
+    session_status: SessionStatus
+
+
+class StopRequest(BaseModel):
+    session_id: UUID
+
+
+class StopResponse(BaseModel):
+    session_status: SessionStatus
+    survey_schema: dict[str, Any]
+
+
+class SurveySubmitRequest(BaseModel):
+    session_id: UUID
+    responses: dict[str, Any]
+    free_text: str | None = None
+
+
+class SurveySubmitResponse(BaseModel):
+    completion_code: str
+    # The Prolific-side completion code participants paste back on Prolific.
+    # Distinct from `completion_code` which is our internal HMAC for our own
+    # session verification.
+    prolific_completion_code: str | None = None
+    # Full URL the frontend should auto-redirect the participant to so they
+    # don't have to copy/paste anything.
+    prolific_redirect_url: str | None = None
+    debrief: "DebriefInfo"
+
+
+# -- Annotation mode ---------------------------------------------------------
+
+
+class AnnotationNextResponse(BaseModel):
+    """Next session available for annotation, plus task context."""
+    session_id: UUID
+    task_type: TaskType
+    task_split: str
+    task_idx: int
+    task_instruction: str
+    turn_count: int
+    messages: list["ChatMessage"]
+    survey_schema: dict[str, Any]
+    # Counters so the annotator has a sense of progress.
+    annotations_done: int
+    annotations_available: int
+    done: bool = False
+
+
+class AnnotationSubmitRequest(BaseModel):
+    annotator_id: str
+    session_id: UUID
+    responses: dict[str, Any]
+    free_text: str | None = None
+
+
+class AnnotationSubmitResponse(BaseModel):
+    completion_code: str | None = None
+    next_available: bool
+    # Populated on the final submission (pinned session, or queue drained) so
+    # the annotator sees a real disclosure instead of a bare "thanks" page.
+    debrief: "AnnotatorDebrief | None" = None
+
+
+class AnnotatorDebrief(BaseModel):
+    annotator_id: str
+    total_annotated: int
+    session_summary: "AnnotatedSessionSummary | None" = None
+
+
+class AnnotatedSessionSummary(BaseModel):
+    """Details about the session this annotator just rated (for pinned flow).
+    On the queue-drained path we don't attach one since the annotator may
+    have rated many in a row."""
+    session_id: UUID
+    task_type: TaskType
+    task_split: str
+    task_idx: int
+    turn_count: int
+    condition: Condition
+    condition_label: str
+    participant_outcome: "TaskOutcome"
+
+
+class DebriefInfo(BaseModel):
+    """Study-completion disclosure revealed to the participant only after the
+    survey has been submitted, to preserve blinding during the conversation."""
+
+    condition: Condition
+    condition_label: str
+    condition_description: str
+    task_type: TaskType
+    task_split: str
+    task_idx: int
+    turn_count: int
+    # Whether the session reached the survey (true if we got here).
+    completed: bool
+    # Task-specific outcome reveal (populated post-hoc).
+    task_outcome: "TaskOutcome"
+
+
+class TaskOutcome(BaseModel):
+    # "success" | "partial" | "failure" | "not_evaluated"
+    status: str
+    label: str
+    detail: str

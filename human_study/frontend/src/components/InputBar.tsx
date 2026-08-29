@@ -1,0 +1,131 @@
+"use client";
+
+import { useEffect } from "react";
+import TextareaAutosize from "react-textarea-autosize";
+import { ArrowUp, Square } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
+
+interface Props {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  onRequestStop?: () => void;
+  disabled: boolean;
+  /** Distinguishes "agent is replying, wait" (awaiting=true) from "session
+   *  ended" (disabled without awaiting) so we can show the right placeholder. */
+  awaiting?: boolean;
+  placeholder?: string;
+}
+
+export function InputBar({
+  value,
+  onChange,
+  onSubmit,
+  onRequestStop,
+  disabled,
+  awaiting = false,
+  placeholder = "Ask anything",
+}: Props) {
+  const isDesktop = useBreakpoint(768);
+  const canSend = !disabled && !awaiting && value.trim().length > 0;
+  const effectivePlaceholder = awaiting
+    ? "Waiting for the agent to reply…"
+    : disabled
+    ? "Conversation ended."
+    : placeholder;
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (canSend) onSubmit();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canSend, onSubmit]);
+
+  return (
+    <div className="border-t border-border bg-panel px-4 py-3 md:px-8 md:py-4">
+      <form
+        className="mx-auto max-w-3xl"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canSend) onSubmit();
+        }}
+      >
+        <div
+          className={cn(
+            "group flex items-end gap-2 rounded-3xl border bg-panelAlt px-4 py-2 transition",
+            "border-border focus-within:border-accent/70 focus-within:ring-1 focus-within:ring-accent/40"
+          )}
+        >
+          <TextareaAutosize
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={effectivePlaceholder}
+            aria-label="Your message"
+            aria-busy={awaiting || undefined}
+            disabled={disabled || awaiting}
+            minRows={1}
+            maxRows={8}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && isDesktop) {
+                e.preventDefault();
+                if (canSend) onSubmit();
+              }
+            }}
+            className="flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-text outline-none placeholder:text-muted/70 disabled:cursor-not-allowed disabled:opacity-60"
+          />
+
+          {onRequestStop && (
+            <button
+              type="button"
+              onClick={onRequestStop}
+              disabled={disabled}
+              aria-label="End conversation and go to survey"
+              title="End conversation and go to the survey"
+              className="mb-0.5 inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-full border border-border bg-panel/60 px-3 text-xs font-medium text-muted hover:border-accent/60 hover:bg-panel hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+            >
+              <Square className="h-3 w-3" aria-hidden="true" />
+              <span>End</span>
+            </button>
+          )}
+
+          <button
+            type="submit"
+            disabled={!canSend}
+            aria-label="Send message"
+            className={cn(
+              "mb-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition",
+              canSend
+                ? "bg-accent text-bg hover:opacity-90"
+                : "bg-border text-muted/60",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            )}
+          >
+            <ArrowUp className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      </form>
+
+      <div className="mx-auto mt-1.5 flex max-w-3xl items-center justify-between px-4 text-[11px] text-muted">
+        <div>
+          {isDesktop ? (
+            <>
+              <kbd className="rounded bg-panelAlt px-1 py-[1px]">Enter</kbd> to send,
+              {" "}
+              <kbd className="rounded bg-panelAlt px-1 py-[1px]">Shift</kbd>+
+              <kbd className="rounded bg-panelAlt px-1 py-[1px]">Enter</kbd> for a new
+              line, or send <code className="rounded bg-panelAlt px-1">/stop</code> to
+              finish.
+            </>
+          ) : (
+            <>Tap the arrow to send. Send <code className="rounded bg-panelAlt px-1">/stop</code> to finish.</>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

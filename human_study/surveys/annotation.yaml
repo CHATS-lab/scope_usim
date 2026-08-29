@@ -1,0 +1,36 @@
+title: "Annotate this conversation"
+items:
+  - key: overall_quality
+    prompt: "Overall, how would you rate the quality of this conversation?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: naturalness
+    prompt: "How natural does this dialogue sound? Could it plausibly be between a real customer and a real agent?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: agent_helpfulness
+    prompt: "How helpful was the agent to the user?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: agent_weirdness
+    prompt: "Did the agent do anything weird, inappropriate, or unexpected? (1 = none at all, 7 = many weird behaviors)"
+    kind: likert
+    min: 1
+    max: 7
+    reverse_coded: true
+  - key: user_realism
+    prompt: "How realistic is the user's side of the conversation?"
+    kind: likert
+    min: 1
+    max: 7
+  - key: task_completion
+    prompt: "Did the agent ultimately complete the user's request? (1 = not at all, 7 = fully completed)"
+    kind: likert
+    min: 1
+    max: 7
+  - key: weird_examples
+    prompt: "If you noticed anything weird, please briefly describe what stood out (leave blank if nothing weird)."
+    kind: text

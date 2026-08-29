@@ -1,0 +1,102 @@
+diff --git a/slime/backends/megatron_utils/actor.py b/slime/backends/megatron_utils/actor.py
+index f68d6655..5a3910ac 100644
+--- a/slime/backends/megatron_utils/actor.py
++++ b/slime/backends/megatron_utils/actor.py
+@@ -45,6 +45,18 @@ logger = logging.getLogger(__name__)
+ 
+ class MegatronTrainRayActor(TrainRayActor):
+     @with_defer(lambda: Timer().start("train_wait"))
++    # --- parallel-config getters -------------------------------------
++    # Upstream slime declared TrainRayActor._get_parallel_config as abstract
++    # but ships no concrete implementation; our cotrain_loop needs dp_size.
++    # Return the dict we already stored during __init__.
++    def _get_parallel_config(self):
++        return self.train_parallel_config
++
++    # Public alias (old name) so external callers (usim/slime/cotrain_loop.py)
++    # keep working without rename. Keep both so either name is safe.
++    def get_train_parallel_config(self):
++        return self.train_parallel_config
++
+     def init(
+         self,
+         args: Namespace,
+diff --git a/slime/ray/rollout.py b/slime/ray/rollout.py
+index 81e9bd9d..67636552 100644
+--- a/slime/ray/rollout.py
++++ b/slime/ray/rollout.py
+@@ -472,6 +472,30 @@ class RolloutManager:
+         num_new = srv.num_new_engines if srv else 0
+         return engines, self.rollout_engine_lock, num_new, gpu_counts, gpu_offsets
+ 
++    def get_server_engines_and_lock(self, server_name: str):
++        """Return engines for a specific named server.
++
++        Like get_updatable_engines_and_lock() but routes by model name.
++        Used by dual-model co-training where each training group updates
++        only its own model's engines. Port of simonucl/slime@3b7cd12e.
++        """
++        srv = self.servers.get(server_name)
++        if srv is None:
++            return [], self.rollout_engine_lock, 0, [], []
++        return (
++            srv.engines,
++            self.rollout_engine_lock,
++            srv.num_new_engines,
++            srv.engine_gpu_counts,
++            srv.engine_gpu_offsets,
++        )
++
++    def clear_server_num_new_engines(self, server_name: str):
++        """Clear num_new_engines for a specific named server."""
++        srv = self.servers.get(server_name)
++        if srv:
++            srv.num_new_engines = 0
++
+     def get_num_rollout_per_epoch(self):
+         assert self.args.rollout_global_dataset
+         return len(self.data_source) // self.args.rollout_batch_size
+@@ -1010,6 +1034,11 @@ def start_rollout_servers(args, pg) -> dict[str, RolloutServer]:
+     rollout_pg_offset = _compute_rollout_offset(args)
+     megatron_num_gpus = _compute_megatron_num_gpus(args)
+ 
++    # Shared across all models so colocated multi-model setups (e.g. cotrain:
++    # actor + opponent on the same 8-GPU node) don't both start from
++    # base_port=15000 and collide on engine bind.
++    port_cursors: dict[int, int] = {}
++
+     for model_idx, model_cfg in enumerate(config.models):
+         model_cfg.resolve(args)
+ 
+@@ -1022,7 +1051,6 @@ def start_rollout_servers(args, pg) -> dict[str, RolloutServer]:
+             args.sglang_router_port = router_port
+ 
+         server_groups: list[ServerGroup] = []
+-        port_cursors: dict[int, int] = {}
+ 
+         has_epd = model_cfg.has_encoder_disaggregation
+ 
+diff --git a/slime/utils/timer.py b/slime/utils/timer.py
+index ec1bdf76..00c5f9e4 100644
+--- a/slime/utils/timer.py
++++ b/slime/utils/timer.py
+@@ -82,10 +82,18 @@ def timer(name_or_func):
+ 
+ @contextmanager
+ def inverse_timer(name):
+-    Timer().end(name)
++    # Be forgiving if the outer "wait" timer wasn't started yet (e.g. the
++    # very first call before any with_defer has primed it) — start/end is
++    # cheap and the semantics of "end if started, always re-start for next
++    # iteration" are what every call site expects.
++    if name in Timer().start_time:
++        Timer().end(name)
+     try:
+         yield
+     finally:
++        if name in Timer().start_time:
++            # Already re-started by a nested call — don't double-start.
++            return
+         Timer().start(name)
+ 
+ 

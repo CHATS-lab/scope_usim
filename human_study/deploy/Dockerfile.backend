@@ -1,0 +1,32 @@
+# Build context is the human_study/ root (see docker-compose.yml).
+FROM python:3.11-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install tau2-bench from the vendored copy. Staged into ./vendor/tau2-bench
+# by the deploy rsync step so the container can install it offline.
+# The package's data files (retail/airline DBs, task sets, policies) live at
+# <repo>/data/tau2/... but aren't included in the wheel, so we copy the full
+# tree to /opt/tau2-bench and point TAU2_DATA_DIR at it.
+COPY vendor/tau2-bench /opt/tau2-bench
+RUN pip install --no-cache-dir /opt/tau2-bench
+ENV TAU2_DATA_DIR=/opt/tau2-bench/data
+
+COPY backend/pyproject.toml ./
+RUN pip install --no-cache-dir \
+    "fastapi>=0.115" "uvicorn[standard]>=0.32" \
+    "sqlmodel>=0.0.22" "psycopg[binary]>=3.2" "pydantic>=2.9" \
+    "pydantic-settings>=2.6" "openai>=1.54" "httpx>=0.27" "pyyaml>=6.0" \
+    "python-multipart>=0.0.12"
+
+COPY backend/app ./app
+COPY tasks /tasks
+COPY surveys /surveys
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
