@@ -185,7 +185,7 @@ If SCOPE is useful in your work, please cite:
 
 ## Acknowledgements
 
-SCOPE builds on [Slime](https://github.com/THUDM/slime), [τ²-bench](https://github.com/sierra-research/tau2-bench), [CooperBench](https://github.com/CooperBench/CooperBench), and the [Tinker cookbook](https://github.com/thinking-machines-lab/tinker-cookbook).
+SCOPE builds on [Slime](https://github.com/THUDM/slime), [τ²-bench](https://github.com/sierra-research/tau2-bench), and [CooperBench](https://github.com/CooperBench/CooperBench).
 
 ## License
 

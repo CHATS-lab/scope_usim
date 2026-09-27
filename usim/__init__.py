@@ -7,7 +7,8 @@ Architecture:
     core/           - Framework-agnostic core logic (orchestrator, environment protocol)
     core/environment/ - Environment implementations (tau2, p4g, cooperbench)
     slime/          - Slime backend integration (optional)
-    tinker/         - Tinker backend integration (optional)
+    p4g/            - Persuasion for Good rollouts and data
+    cooperbench/    - CooperBench rollouts and data
 
 Example usage:
     from usim import UserSimOrchestrator, UserSimConfig, TrainableRole
@@ -62,10 +63,3 @@ try:
     __all__.append("slime")
 except ImportError:
     slime = None  # Slime backend not available (install with: pip install usim[slime])
-
-# Tinker backend - requires tinker package
-try:
-    from usim import tinker
-    __all__.append("tinker")
-except ImportError:
-    tinker = None  # Tinker backend not available (install with: pip install usim[tinker])

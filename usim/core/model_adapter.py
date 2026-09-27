@@ -1,7 +1,7 @@
 """Protocol for model adapters across different RL backends.
 
 This defines the interface that all framework-specific adapters must implement
-to work with UserSimOrchestrator. Each backend (Slime, Tinker) provides its
+to work with UserSimOrchestrator. Each backend (currently Slime) provides its
 own adapter that translates between the backend's model interface and this protocol.
 """
 

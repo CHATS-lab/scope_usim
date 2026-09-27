@@ -1,4 +1,4 @@
-"""CooperBench agent implementing BaseAgent protocol.
+"""CooperBench agent driven by usim.core.coding_orchestrator.CodingAgentOrchestrator.
 
 Renders system/instance prompts from CooperBench mini-swe-agent-v2 templates
 (config/mini.yaml) for coding agents that use OpenAI-style tool calling.

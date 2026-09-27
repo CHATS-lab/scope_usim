@@ -378,9 +378,9 @@ class Trajectory:
     """Complete trajectory from a session for training.
 
     This is the main output of the orchestrator, containing all information
-    needed for RL training. Compatible with both Slime and Tinker backends.
+    needed for RL training (converted to Slime samples by usim.slime).
 
-    The loss_mask and rollout_log_probs exclude prompt tokens (match spare convention).
+    The loss_mask and rollout_log_probs exclude prompt tokens.
     The offset ``base_offset = len(tokens) - len(loss_mask)`` gives the prompt length.
 
     Attributes:

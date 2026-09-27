@@ -243,7 +243,8 @@ class CodingAgentOrchestrator:
 
         Args:
             task: Task specification with instructions, feature description, etc.
-            agent: Agent instance implementing BaseAgent protocol
+            agent: Agent exposing get_init_state(), build_messages(state) and
+                stop(...), e.g. usim.cooperbench.agent.CooperBenchAgent
 
         Returns:
             Trajectory with all tokens, loss masks, and logprobs for training
