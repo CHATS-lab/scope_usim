@@ -15,7 +15,7 @@ Dual-model modes (dual_cotrain/dual_selfplay):
   (colocated time-multiplexing). FilteredRolloutProxy enables per-model
   NCCL/IPC weight sync. DualRolloutSplitter separates combined rollout
   output into per-model training data.
-  Requires: Slime patch patches/slime_per_server_engines.patch
+  Requires: Slime patch patches/slime_cotrain_combined.patch
 """
 
 import copy
@@ -376,7 +376,7 @@ def dual_cotrain(args):
 
     Requires:
       - sglang-config with "actor" and "opponent" models (both update_weights: true)
-      - Slime patch: patches/slime_per_server_engines.patch
+      - Slime patch: patches/slime_cotrain_combined.patch
     """
     configure_logger()
 

@@ -9,7 +9,7 @@ Supports five training modes:
 
 Single-model modes (cotrain/selfplay) use one training group for both roles.
 Dual-model modes use two independent training groups with FilteredRolloutProxy
-for per-model NCCL/IPC weight sync (requires slime_per_server_engines.patch).
+for per-model NCCL/IPC weight sync (requires patches/slime_cotrain_combined.patch).
 
 Usage:
   # Single training group co-training

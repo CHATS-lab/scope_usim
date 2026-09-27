@@ -15,7 +15,7 @@ GPU offset remapping:
   distributed instead of colocated. The proxy subtracts gpu_offset_base
   to align offsets with training ranks.
 
-Requires Slime patch: patches/slime_per_server_engines.patch
+Requires Slime patch: patches/slime_cotrain_combined.patch
   (adds get_server_engines_and_lock() to RolloutManager)
 """
 
