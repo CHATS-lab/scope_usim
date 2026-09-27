@@ -151,11 +151,7 @@ async def _baseline_single(
         return trajectory_to_slime_sample(trajectory, sample.index)
 
     except Exception as e:
-        import traceback
-        err_msg = f"Baseline rollout failed (sample {sample.index}): {e}"
-        logger.error(err_msg, exc_info=True)
-        print(f"[CB ERROR] {err_msg}", flush=True)
-        traceback.print_exc()
+        logger.error(f"Baseline rollout failed (sample {sample.index}): {e}", exc_info=True)
         return _error_sample(sample, str(e))
     finally:
         if environment:
@@ -250,11 +246,7 @@ async def _solo_single(
         return trajectory_to_slime_sample(trajectory, sample.index)
 
     except Exception as e:
-        import traceback
-        err_msg = f"Solo rollout failed (sample {sample.index}): {e}"
-        logger.error(err_msg, exc_info=True)
-        print(f"[CB ERROR] {err_msg}", flush=True)
-        traceback.print_exc()
+        logger.error(f"Solo rollout failed (sample {sample.index}): {e}", exc_info=True)
         return _error_sample(sample, str(e))
     finally:
         if environment:
@@ -416,11 +408,7 @@ async def _coop_single(
         return trajectory_to_slime_sample(trajectory, sample.index)
 
     except Exception as e:
-        import traceback
-        err_msg = f"Coop rollout failed (sample {sample.index}): {e}"
-        logger.error(err_msg, exc_info=True)
-        print(f"[CB ERROR] {err_msg}", flush=True)
-        traceback.print_exc()
+        logger.error(f"Coop rollout failed (sample {sample.index}): {e}", exc_info=True)
         return _error_sample(sample, str(e))
     finally:
         if environment:
@@ -462,29 +450,26 @@ def _preflight_check(args: Namespace) -> None:
     """
     import os
 
-    print("[CB] === Pre-flight checks ===", flush=True)
+    logger.info("[CB] === Pre-flight checks ===")
 
     # 1. Check Modal auth
-    print(f"[CB] MODAL_TOKEN_ID set: {bool(os.environ.get('MODAL_TOKEN_ID'))}", flush=True)
-    print(f"[CB] MODAL_TOKEN_SECRET set: {bool(os.environ.get('MODAL_TOKEN_SECRET'))}", flush=True)
+    logger.info(f"[CB] MODAL_TOKEN_ID set: {bool(os.environ.get('MODAL_TOKEN_ID'))}")
+    logger.info(f"[CB] MODAL_TOKEN_SECRET set: {bool(os.environ.get('MODAL_TOKEN_SECRET'))}")
     try:
         import modal
-        print(f"[CB] modal version: {modal.__version__}", flush=True)
+        logger.info(f"[CB] modal version: {modal.__version__}")
         app = modal.App.lookup("cooperbench", create_if_missing=True)
-        print(f"[CB] Modal auth OK, app={app}", flush=True)
+        logger.info(f"[CB] Modal auth OK, app={app}")
     except Exception as e:
-        print(f"[CB] Modal auth FAILED: {e}", flush=True)
+        logger.error(f"[CB] Modal auth FAILED: {e}")
         raise RuntimeError(f"Modal pre-flight failed: {e}") from e
 
     # 2. Check model adapter
     try:
         adapter = _get_or_create_model_adapter(args)
-        print(
-            f"[CB] Model adapter OK: {adapter.router_ip}:{adapter.router_port}",
-            flush=True,
-        )
+        logger.info(f"[CB] Model adapter OK: {adapter.router_ip}:{adapter.router_port}")
     except Exception as e:
-        print(f"[CB] Model adapter FAILED: {e}", flush=True)
+        logger.error(f"[CB] Model adapter FAILED: {e}")
         raise RuntimeError(f"Model adapter pre-flight failed: {e}") from e
 
     # 3. Validate tool call parser with a test input
@@ -507,23 +492,21 @@ def _preflight_check(args: Namespace) -> None:
         parser_name = getattr(args, "cooperbench_tool_call_parser", "qwen3_coder")
         result = _parse_tool_calls(test_response, test_tools, parser_name)
         if result["calls"]:
-            print(
+            logger.info(
                 f"[CB] Tool call parser OK (parser={parser_name}): "
                 f"parsed {len(result['calls'])} calls, "
                 f"name={result['calls'][0]['name']}, "
-                f"args={result['calls'][0]['arguments']}",
-                flush=True,
+                f"args={result['calls'][0]['arguments']}"
             )
         else:
-            print(
-                f"[CB] WARNING: Tool call parser returned 0 calls for test input! "
-                f"parser={parser_name}",
-                flush=True,
+            logger.warning(
+                f"[CB] Tool call parser returned 0 calls for test input! "
+                f"parser={parser_name}"
             )
     except Exception as e:
-        print(f"[CB] Tool call parser test FAILED: {e}", flush=True)
+        logger.error(f"[CB] Tool call parser test FAILED: {e}")
 
-    print("[CB] === Pre-flight checks PASSED ===", flush=True)
+    logger.info("[CB] === Pre-flight checks PASSED ===")
 
 
 async def _run_batch_async(
