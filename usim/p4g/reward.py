@@ -2,7 +2,8 @@
 
 Extracts donation amount from persuadee messages and normalizes to [0, 1].
 
-Regex patterns ported from persuasion_simulation/src/evaluation/metrics/donation_metrics.py.
+The regex patterns follow the donation-amount extraction in the authors'
+earlier, unreleased P4G simulation code.
 """
 
 import re

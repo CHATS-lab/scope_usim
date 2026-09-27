@@ -42,15 +42,9 @@ out/
 
 # Experiment trackers, outputs, and service state
 wandb/
-tillicum/
 /results/
 /human_study/results/
 /human_study/analysis/
 /human_study/screenshots/
 /human_study/deploy/.env.local
 /cmd/slime/**/CRASH_LOG_*.md
-
-# Local research checkouts that are not registered submodules
-/DrMAS/
-/external/mini-swe-agent/
-/external/persuasion_simulation/

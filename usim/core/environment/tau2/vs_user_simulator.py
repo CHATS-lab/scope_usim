@@ -6,9 +6,8 @@ response, VS asks for N plausible responses along with their verbalized
 probabilities, then samples one from the resulting distribution. This
 mitigates mode collapse in instruction-tuned user simulators.
 
-The prompt template mirrors the one used in the public P4G verbalized-sampling
-reference implementation (external/persuasion_simulation) for consistency with
-our own 0313 P4G baselines, adapted for the tau2-bench setting.
+The prompt template mirrors the P4G Verbalized Sampling prompt in
+usim/p4g/prompts.py, adapted for the tau2-bench setting.
 """
 
 from __future__ import annotations
@@ -31,8 +30,8 @@ from usim.core.vs_schema import get_vs_response_format
 
 
 # Prompt appended to the base system prompt when VS is enabled. We keep this
-# close to the persuasion_simulation reference but swap the P4G-specific
-# framing ("chat partner") for tau2's "customer service agent" context.
+# close to the P4G VS prompt but swap the P4G-specific framing ("chat
+# partner") for tau2's "customer service agent" context.
 _VS_PROB_INSTRUCTION = """
 ## Response Diversity Instructions (Overrides Earlier Guidelines)
 
@@ -154,8 +153,8 @@ class VerbalizedSamplingUserSimulator(UserSimulator):
         candidates: Optional[List[dict]] = None
 
         # Force JSON output via OpenAI's response_format and disable tools.
-        # This is the structured-output enforcement that mirrors the
-        # persuasion_simulation reference impl. The trade-off in tau2 is
+        # This is the same structured-output enforcement as the P4G VS
+        # simulator. The trade-off in tau2 is
         # losing the user-side `transfer_to_human_agents` tool, but that is
         # rare and not load-bearing for the VS diversity question.
         vs_llm_args = dict(self.llm_args)

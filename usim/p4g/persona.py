@@ -1,9 +1,9 @@
 """Persona loading for Persuasion for Good.
 
 Loads speaker persona data from convokit Corpus and formats it
-as bullet-point text for prompt injection.
-
-Ported from persuasion_simulation/src/prompts/persona.py (bullet-point format only).
+as bullet-point text for prompt injection. The fields are the participant
+survey answers released with the Persuasion for Good corpus (demographics,
+Big-Five traits, moral foundations, Schwartz values, decision style).
 """
 
 import logging

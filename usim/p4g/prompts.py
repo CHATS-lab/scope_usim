@@ -1,6 +1,7 @@
 """Prompt templates for Persuasion for Good.
 
-Ported from persuasion_simulation/src/prompts/ (baseline sim_type only).
+Adapted from the authors' earlier, unreleased P4G simulation code (baseline
+simulation type only).
 """
 
 from textwrap import dedent

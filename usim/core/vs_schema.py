@@ -1,8 +1,8 @@
 """OpenAI ``response_format`` schemas for Verbalized Sampling.
 
-Mirrors ``external/persuasion_simulation/src/llms/schema.py`` so the JSON we
-get back is shape-guaranteed by the API rather than depending on the model
-following a prompt-only instruction.
+Mirrors the schema used in the authors' earlier P4G Verbalized Sampling code,
+so the JSON we get back is shape-guaranteed by the API rather than depending on
+the model following a prompt-only instruction.
 
 The ``random`` schema omits ``probability`` (matching the random VS prompt
 which doesn't ask for it). The ``prob`` schema requires both ``text`` and
