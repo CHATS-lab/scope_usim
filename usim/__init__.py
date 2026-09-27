@@ -35,7 +35,6 @@ from usim.core.types import (
     probe_inter_message_glue,
 )
 from usim.core.model_adapter import ModelAdapter
-from usim.core.api_model_adapter import OpenAIModelAdapter, create_openai_model_adapter
 from usim.core.orchestrator import UserSimOrchestrator
 
 __all__ = [
@@ -50,8 +49,6 @@ __all__ = [
     "UserState",
     "AgentState",
     "ModelAdapter",
-    "OpenAIModelAdapter",
-    "create_openai_model_adapter",
     "UserSimOrchestrator",
     "compute_token_delta",
     "get_token_delta",
