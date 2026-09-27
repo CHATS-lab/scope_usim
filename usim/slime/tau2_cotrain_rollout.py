@@ -423,9 +423,10 @@ def tau2_cotrain_generate_rollout(
 ) -> RolloutFnTrainOutput:
     """Batch-level tau2 co-training rollout function."""
     if evaluation:
-        # Delegate to standard tau2 eval
-        from usim.slime.rollout import _eval_rollout
-        return _eval_rollout(args, rollout_id, data_source)
+        # Delegate to the standard tau2 eval (only the agent trajectory matters).
+        # Mirrors the P4G co-training path, which delegates to _p4g_eval_rollout.
+        from usim.slime.rollout import _usim_eval_rollout
+        return _usim_eval_rollout(args, rollout_id)
 
     samples = data_source.get_samples(args.rollout_batch_size)
     agent_grouped, opponent_grouped = asyncio.run(
