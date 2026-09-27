@@ -1,19 +1,40 @@
 #!/bin/bash
 
-# USIM BASE POLICY EVAL — Qwen3-4B-Instruct on BOTH tau2-bench AND P4G
+# Base: evaluate the untrained Qwen3-4B-Instruct-2507 on tau2-bench retail, then
+# on P4G, against the 6-simulator panels in eval_configs/.
 # Agent (base model, no training): Qwen3-4B-Instruct-2507 via SGLang
 # Purpose: Evaluate base (pre-training) policy against all 6 evaluator models
 # This runs both tau2 and P4G evals in sequence by running training with
 # eval-interval=1 and NO skip-eval-before-train, so eval fires at step 0.
 # Date: 2026-03-12
+#
+# Node use: before launching, this script kills every SGLang and Ray
+# process on the machine (pkill -9 sglang; ray stop --force; pkill -9 ray)
+# and starts a fresh Ray head that claims 8 GPUs. Run it on a dedicated
+# node, or set SKIP_PROCESS_CLEANUP=1 to skip the kill step.
+# It kills and restarts Ray again between the tau2 and P4G jobs.
+# It also runs pip install 'transformers>=4.51.0,<5.0.0' in the active
+# Python environment.
+#
+# The Base number is the evaluation at rollout 0 (--eval-interval 1 without
+# --skip-eval-before-train). The job then keeps training for 1000 rollouts;
+# stop it with `ray job stop` once the rollout-0 evaluation is logged.
+# The P4G job starts only after the tau2 job ends.
+#
+# Paths: MODEL_DIR (required) must contain Qwen3-4B-Instruct-2507/ and
+# Qwen3-4B-Instruct-2507_torch_dist/. OUTPUT_DIR defaults to
+# results/<run>/<timestamp> inside the repository. See cmd/slime/README.md.
 
 pip install 'transformers>=4.51.0,<5.0.0' 2>/dev/null || true
 
-pkill -9 sglang 2>/dev/null || true
-sleep 3
-ray stop --force 2>/dev/null || true
-pkill -9 ray 2>/dev/null || true
-sleep 3
+# Stop SGLang and Ray processes left on this node (see the header).
+if [ "${SKIP_PROCESS_CLEANUP:-0}" != "1" ]; then
+    pkill -9 sglang 2>/dev/null || true
+    sleep 3
+    ray stop --force 2>/dev/null || true
+    pkill -9 ray 2>/dev/null || true
+    sleep 3
+fi
 
 set -e
 
@@ -33,9 +54,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0312_base_eval/$(date +%Y%m%d_%H%M%S)}"
-WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
-MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/results/base_eval/$(date +%Y%m%d_%H%M%S)}"
+MODEL_DIR="${MODEL_DIR:?set MODEL_DIR to the directory that holds the model checkpoints; see cmd/slime/README.md}"
 
 mkdir -p "${OUTPUT_DIR}"
 

@@ -1,20 +1,33 @@
 #!/bin/bash
 
-# P4G Verbalized Sampling Training — Qwen3-4B-Instruct
+# P4G, Verbalized Sampling: frozen GPT-5-mini persuadee queried with
+# --usim-verbalized-sampling.
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
 # User sim (fixed):  gpt-5-mini via OpenAI DIRECT (persuadee)
 #                    with Verbalized Sampling (arxiv:2510.01171)
 # Date: 2026-04-08 overnight
 #
+# Node use: before launching, this script kills every SGLang and Ray
+# process on the machine (pkill -9 sglang; ray stop --force; pkill -9 ray)
+# and starts a fresh Ray head that claims 8 GPUs. Run it on a dedicated
+# node, or set SKIP_PROCESS_CLEANUP=1 to skip the kill step.
+#
+# Paths: MODEL_DIR (required) must contain Qwen3-4B-Instruct-2507/ and
+# Qwen3-4B-Instruct-2507_torch_dist/. OUTPUT_DIR defaults to
+# results/<run>/<timestamp> inside the repository. See cmd/slime/README.md.
+#
 # NOTE: gpt-5-mini must go through api.openai.com, NOT OpenRouter.
 # litellm+OpenRouter hits an "unexpected 'usage' kwarg" error for
 # gpt-5-mini (see 0403 ensemble run fixes for background).
 
-pkill -9 sglang 2>/dev/null || true
-sleep 3
-ray stop --force 2>/dev/null || true
-pkill -9 ray 2>/dev/null || true
-sleep 3
+# Stop SGLang and Ray processes left on this node (see the header).
+if [ "${SKIP_PROCESS_CLEANUP:-0}" != "1" ]; then
+    pkill -9 sglang 2>/dev/null || true
+    sleep 3
+    ray stop --force 2>/dev/null || true
+    pkill -9 ray 2>/dev/null || true
+    sleep 3
+fi
 
 set -e
 
@@ -34,9 +47,8 @@ NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
 if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0408_p4g_verbalized_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
-WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
-MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/results/p4g_vs_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
+MODEL_DIR="${MODEL_DIR:?set MODEL_DIR to the directory that holds the model checkpoints; see cmd/slime/README.md}"
 
 mkdir -p "${OUTPUT_DIR}"
 

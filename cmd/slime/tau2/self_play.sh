@@ -1,18 +1,31 @@
 #!/bin/bash
 
-# τ²-bench co-training with SPICE-style curriculum reward on the user side.
+# tau2-bench retail, Self-Play (code name: --training-mode dual_cotrain) with the
+# curriculum simulator reward.
 # Agent:  Qwen3-4B-Instruct-2507, reward = task evaluator score ∈ {0,1}.
 # User:   Qwen3-4B-Instruct-2507, reward = exp(-(var - 0.25)^2 / 0.02) per
 #         prompt group, with a -0.1 tax on tau2 tool errors. User is rewarded
 #         for producing difficulty that splits agent outcomes ~50/50 (max
 #         Bernoulli variance).
 # Date: 2026-04-17
+#
+# Node use: before launching, this script kills every SGLang and Ray
+# process on the machine (pkill -9 sglang; ray stop --force; pkill -9 ray)
+# and starts a fresh Ray head that claims 8 GPUs. Run it on a dedicated
+# node, or set SKIP_PROCESS_CLEANUP=1 to skip the kill step.
+#
+# Paths: MODEL_DIR (required) must contain Qwen3-4B-Instruct-2507/ and
+# Qwen3-4B-Instruct-2507_torch_dist/. OUTPUT_DIR defaults to
+# results/<run>/<timestamp> inside the repository. See cmd/slime/README.md.
 
-pkill -9 sglang 2>/dev/null || true
-sleep 3
-ray stop --force 2>/dev/null || true
-pkill -9 ray 2>/dev/null || true
-sleep 3
+# Stop SGLang and Ray processes left on this node (see the header).
+if [ "${SKIP_PROCESS_CLEANUP:-0}" != "1" ]; then
+    pkill -9 sglang 2>/dev/null || true
+    sleep 3
+    ray stop --force 2>/dev/null || true
+    pkill -9 ray 2>/dev/null || true
+    sleep 3
+fi
 
 set -e
 
@@ -31,13 +44,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0417_tau2_cotrain_curriculum/$(date +%Y%m%d_%H%M%S)}"
-# Modal mounts both volumes: /mnt/spare-workspace (Qwen3-4B model checkpoints)
-# and /mnt/usim-workspace (repo + outputs). The launcher overrides
-# WORKSPACE_DIR to the usim mount; MODEL_DIR stays on spare since that's
-# where the actual HF + torch_dist checkpoints live.
-WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
-MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/results/tau2_self_play/$(date +%Y%m%d_%H%M%S)}"
+MODEL_DIR="${MODEL_DIR:?set MODEL_DIR to the directory that holds the model checkpoints; see cmd/slime/README.md}"
 
 mkdir -p "${OUTPUT_DIR}"
 

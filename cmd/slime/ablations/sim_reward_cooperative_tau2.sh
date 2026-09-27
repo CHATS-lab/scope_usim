@@ -1,16 +1,29 @@
 #!/bin/bash
 
-# tau2-bench Evolving Opponents — Qwen3-4B-Instruct dual co-training
+# Ablation, tau2-bench retail: Self-Play with the cooperative simulator reward
+# (the user receives the agent's reward). The curriculum arm is tau2/self_play.sh.
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
-# Opponent (trainable): Qwen3-4B-Instruct-2507 via SGLang (opposite reward)
+# Opponent (trainable): Qwen3-4B-Instruct-2507 via SGLang (same reward as the agent)
 # Both models train independently with NCCL/IPC weight sync
 # Date: 2026-04-03
+#
+# Node use: before launching, this script kills every SGLang and Ray
+# process on the machine (pkill -9 sglang; ray stop --force; pkill -9 ray)
+# and starts a fresh Ray head that claims 8 GPUs. Run it on a dedicated
+# node, or set SKIP_PROCESS_CLEANUP=1 to skip the kill step.
+#
+# Paths: MODEL_DIR (required) must contain Qwen3-4B-Instruct-2507/ and
+# Qwen3-4B-Instruct-2507_torch_dist/. OUTPUT_DIR defaults to
+# results/<run>/<timestamp> inside the repository. See cmd/slime/README.md.
 
-pkill -9 sglang 2>/dev/null || true
-sleep 3
-ray stop --force 2>/dev/null || true
-pkill -9 ray 2>/dev/null || true
-sleep 3
+# Stop SGLang and Ray processes left on this node (see the header).
+if [ "${SKIP_PROCESS_CLEANUP:-0}" != "1" ]; then
+    pkill -9 sglang 2>/dev/null || true
+    sleep 3
+    ray stop --force 2>/dev/null || true
+    pkill -9 ray 2>/dev/null || true
+    sleep 3
+fi
 
 set -e
 
@@ -30,9 +43,8 @@ NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
 if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0403_tau2_evolving/$(date +%Y%m%d_%H%M%S)}"
-WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
-MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/results/ablation_sim_reward_cooperative_tau2/$(date +%Y%m%d_%H%M%S)}"
+MODEL_DIR="${MODEL_DIR:?set MODEL_DIR to the directory that holds the model checkpoints; see cmd/slime/README.md}"
 
 mkdir -p "${OUTPUT_DIR}"
 
@@ -61,6 +73,9 @@ COTRAIN_ARGS=(
    --training-mode dual_cotrain
    --trainable-role agent
    --max-turns 30
+   # --cooperative-reward is read only by the P4G co-training rollout. The tau2
+   # rollout always gives the user the agent's reward unless
+   # --tau2-user-reward-mode curriculum is set.
    --cooperative-reward
    --no-agent-kl
 )

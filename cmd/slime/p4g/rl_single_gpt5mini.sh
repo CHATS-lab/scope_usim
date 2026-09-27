@@ -1,19 +1,32 @@
 #!/bin/bash
 
-# P4G Training Script — Qwen3-4B-Instruct on Persuasion for Good
+# P4G, RL (Single): train Qwen3-4B-Instruct-2507 against a frozen GPT-5-mini
+# persuadee. Also the GPT-5-mini run of the single-simulator collapse study.
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
 # User sim (fixed): gpt-5-mini via OpenAI API (persuadee)
 # Date: 2026-03-13 (0313 baseline)
+#
+# Node use: before launching, this script kills every SGLang and Ray
+# process on the machine (pkill -9 sglang; ray stop --force; pkill -9 ray)
+# and starts a fresh Ray head that claims 8 GPUs. Run it on a dedicated
+# node, or set SKIP_PROCESS_CLEANUP=1 to skip the kill step.
+#
+# Paths: MODEL_DIR (required) must contain Qwen3-4B-Instruct-2507/ and
+# Qwen3-4B-Instruct-2507_torch_dist/. OUTPUT_DIR defaults to
+# results/<run>/<timestamp> inside the repository. See cmd/slime/README.md.
 
-pkill -9 sglang 2>/dev/null || true
-sleep 3
-ray stop --force 2>/dev/null || true
-pkill -9 ray 2>/dev/null || true
-sleep 3
+# Stop SGLang and Ray processes left on this node (see the header).
+if [ "${SKIP_PROCESS_CLEANUP:-0}" != "1" ]; then
+    pkill -9 sglang 2>/dev/null || true
+    sleep 3
+    ray stop --force 2>/dev/null || true
+    pkill -9 ray 2>/dev/null || true
+    sleep 3
+fi
 
 set -e
 
-export PYTHONBUFFERED=1
+export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
 
 # Detect NVLink
@@ -29,8 +42,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_p4g_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
-WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/results/p4g_rl_single_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
+MODEL_DIR="${MODEL_DIR:?set MODEL_DIR to the directory that holds the model checkpoints; see cmd/slime/README.md}"
 
 mkdir -p "${OUTPUT_DIR}"
 
@@ -38,8 +51,8 @@ mkdir -p "${OUTPUT_DIR}"
 source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507"
-   --ref-load "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
+   --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
+   --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
    --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_usim_p4g/"
    --save-interval 32
 )

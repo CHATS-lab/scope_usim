@@ -1,20 +1,37 @@
 #!/bin/bash
 
-# CooperBench Training Script — Qwen3.5-27B on CooperBench
+# CooperBench, Qwen3.5-27B: Slime training in the setting chosen by
+# COOPERBENCH_SETTING (baseline, solo or coop).
 # Agent (trainable): Qwen3.5-27B via SGLang
 # Partner (fixed, coop only): gemini-3-flash-preview via Gemini API
 # Settings: baseline, solo (default), coop
-# Date: 2025-03-04
+# Date: 2026-03-04
+#
+# Node use: before launching, this script kills every SGLang and Ray
+# process on the machine (pkill -9 sglang; ray stop --force; pkill -9 ray)
+# and starts a fresh Ray head that claims 8 GPUs. Run it on a dedicated
+# node, or set SKIP_PROCESS_CLEANUP=1 to skip the kill step.
+# If external/CooperBench/dataset is missing it pip-installs
+# huggingface_hub and downloads the CooperBench dataset. With
+# COOPERBENCH_SETTING=coop it starts a local redis-server daemon when
+# none is running.
+#
+# Paths: MODEL_DIR (required) must contain Qwen3.5-27B/ and
+# Qwen3.5-27B_torch_dist/. OUTPUT_DIR defaults to results/<run>/<timestamp>
+# inside the repository. See cmd/slime/README.md.
 
-pkill -9 sglang 2>/dev/null || true
-sleep 3
-ray stop --force 2>/dev/null || true
-pkill -9 ray 2>/dev/null || true
-sleep 3
+# Stop SGLang and Ray processes left on this node (see the header).
+if [ "${SKIP_PROCESS_CLEANUP:-0}" != "1" ]; then
+    pkill -9 sglang 2>/dev/null || true
+    sleep 3
+    ray stop --force 2>/dev/null || true
+    pkill -9 ray 2>/dev/null || true
+    sleep 3
+fi
 
 set -e
 
-export PYTHONBUFFERED=1
+export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
 
 # Detect NVLink
@@ -34,8 +51,8 @@ COOPERBENCH_DIR="${PROJECT_ROOT}/external/CooperBench"
 # Setting: baseline, solo, or coop (override via COOPERBENCH_SETTING env var)
 SETTING="${COOPERBENCH_SETTING:-solo}"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0304_cooperbench_${SETTING}_27b/$(date +%Y%m%d_%H%M%S)}"
-WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/results/cooperbench_${SETTING}_qwen3_5_27b/$(date +%Y%m%d_%H%M%S)}"
+MODEL_DIR="${MODEL_DIR:?set MODEL_DIR to the directory that holds the model checkpoints; see cmd/slime/README.md}"
 
 mkdir -p "${OUTPUT_DIR}"
 
@@ -59,8 +76,8 @@ fi
 source "${SLIME_DIR}/scripts/models/qwen3.5-27B.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint "${WORKSPACE_DIR}/Qwen3.5-27B"
-   --ref-load "${WORKSPACE_DIR}/Qwen3.5-27B_torch_dist"
+   --hf-checkpoint "${MODEL_DIR}/Qwen3.5-27B"
+   --ref-load "${MODEL_DIR}/Qwen3.5-27B_torch_dist"
    --save "${OUTPUT_DIR}/Qwen3.5-27B_cooperbench_${SETTING}/"
    --save-interval 32
 )
