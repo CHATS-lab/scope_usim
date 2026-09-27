@@ -1,9 +1,13 @@
 #!/bin/bash
 
-# P4G Training Script — Qwen3-4B-Instruct on Persuasion for Good
-# Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
-# User sim (fixed): google/gemini-3-flash-preview via OpenRouter (persuadee)
-# Date: 2026-03-13 (0313 baseline)
+# tau2-bench Verbalized Sampling Training — Qwen3-4B-Instruct
+# Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
+# User sim (fixed):  claude-haiku-4-5 via Anthropic DIRECT
+#                    with Verbalized Sampling (arxiv:2510.01171)
+# Date: 2026-04-10
+#
+# NOTE: claude-haiku-4-5 goes through Anthropic API directly.
+# litellm auto-detects anthropic models and routes correctly.
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -13,41 +17,41 @@ sleep 3
 
 set -e
 
-export PYTHONBUFFERED=1
+export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
+
+# Load secrets
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+if [ -f "${PROJECT_ROOT}/.env" ]; then
+    set -a; source "${PROJECT_ROOT}/.env"; set +a
+fi
+SLIME_DIR="${PROJECT_ROOT}/slime"
 
 # Detect NVLink
 NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
-if [ "$NVLINK_COUNT" -gt 0 ]; then
-    HAS_NVLINK=1
-else
-    HAS_NVLINK=0
-fi
+if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"
-SLIME_DIR="${PROJECT_ROOT}/slime"
-
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_p4g_gemini/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0410_tau2_verbalized_haiku/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
+MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
 
-# Source model configuration (Instruct, rotary_base=5000000)
 source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507"
-   --ref-load "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_usim_p4g/"
-   --save-interval 32
+   --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
+   --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_verbalized_haiku_tau2/"
+   --save-interval 16
 )
 
 ROLLOUT_ARGS=(
-   --data-source-path usim.p4g.data_source.get_p4g_data_source
-   --rollout-function-path usim.p4g.rollout.p4g_generate_rollout
-   --num-rollout 1000
+   --data-source-path usim.slime.data_source.get_tau2_data_source
+   --rollout-function-path usim.slime.rollout.usim_generate_rollout
+   --num-rollout 100
    --rollout-batch-size 16
    --n-samples-per-prompt 8
    --rollout-max-response-len 32768
@@ -56,17 +60,21 @@ ROLLOUT_ARGS=(
    --balance-data
 )
 
-# P4G-specific arguments
-P4G_ARGS=(
+USIM_ARGS=(
    --trainable-role agent
-   --max-turns 10
-   --usim-fixed-opponent-model "google/gemini-3-flash-preview"
-   --usim-fixed-opponent-base-url "https://openrouter.ai/api/v1"
-   --usim-fixed-opponent-api-key-var "OPENROUTER_API_KEY"
-   --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus"
-   --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
-   --p4g-word-limit 50
-   --p4g-num-turns 10
+   --max-turns 30
+   --usim-domain retail
+   --usim-fixed-opponent-model "claude-haiku-4-5-20251001"
+   --usim-fixed-opponent-base-url "https://api.anthropic.com"
+   --usim-fixed-opponent-api-key-var "ANTHROPIC_API_KEY"
+   # Verbalized Sampling (arxiv:2510.01171)
+   --usim-verbalized-sampling
+   --usim-vs-num-samples 5
+   --usim-vs-method prob
+)
+
+TRAJECTORY_ARGS=(
+   --trajectory-output-dir "${OUTPUT_DIR}/trajectories"
 )
 
 PERF_ARGS=(
@@ -75,7 +83,7 @@ PERF_ARGS=(
    --pipeline-model-parallel-size 1
    --context-parallel-size 2
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 8192
+   --max-tokens-per-gpu 4096
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
@@ -96,12 +104,11 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project "${WANDB_PROJECT:-scope}"
-   --wandb-group qwen3-4B-Instruct-2507-p4g-gemini-0313
+   --wandb-group qwen3-4B-Instruct-2507-tau2-verbalized-haiku-0410
 )
 
-# Eval config (template in eval_configs/, resolved at runtime)
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
-envsubst < "${PROJECT_ROOT}/eval_configs/p4g_6model.yaml" > "${EVAL_CONFIG_FILE}"
+envsubst < "${PROJECT_ROOT}/eval_configs/tau2_retail_3model_direct.yaml" > "${EVAL_CONFIG_FILE}"
 
 EVAL_ARGS=(
    --eval-interval 16
@@ -111,7 +118,7 @@ EVAL_ARGS=(
 
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 5e-7
+   --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
    --adam-beta1 0.9
@@ -144,14 +151,15 @@ RUNTIME_ENV_JSON="{
 
 ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
-   -- python3 -m train_p4g_slime \
+   -- python3 -m train_usim_slime \
    --actor-num-nodes 1 \
-   --actor-num-gpus-per-node 2 \
-   --rollout-num-gpus 6 \
+   --actor-num-gpus-per-node 8 \
+   --colocate \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
-   ${P4G_ARGS[@]} \
+   ${USIM_ARGS[@]} \
+   ${TRAJECTORY_ARGS[@]} \
    ${EVAL_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \
    ${GRPO_ARGS[@]} \

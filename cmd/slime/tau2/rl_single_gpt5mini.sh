@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# tau2-bench Ensemble Training — Qwen3-4B-Instruct vs 3-model rotation
+# USIM Training Script — Qwen3-4B-Instruct on tau2-bench (retail)
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
-# User sim (fixed): rotation of haiku-4.5, gpt-5-mini, gemini-3-flash
-# Date: 2026-04-03
+# User sim (fixed): gpt-5-mini via OpenAI API
+# Date: 2026-03-13 (0313 baseline)
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -13,41 +13,41 @@ sleep 3
 
 set -e
 
-export PYTHONUNBUFFERED=1
+export PYTHONBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
-
-# Load secrets
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../../" && pwd)"
-if [ -f "${PROJECT_ROOT}/.env" ]; then
-    set -a; source "${PROJECT_ROOT}/.env"; set +a
-fi
-SLIME_DIR="${PROJECT_ROOT}/slime"
 
 # Detect NVLink
 NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
-if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
+if [ "$NVLINK_COUNT" -gt 0 ]; then
+    HAS_NVLINK=1
+else
+    HAS_NVLINK=0
+fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0403_tau2_ensemble/$(date +%Y%m%d_%H%M%S)}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+SLIME_DIR="${PROJECT_ROOT}/slime"
+
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_tau2_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
-MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
 
+# Source model configuration (Instruct, rotary_base=5000000)
 source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
-   --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_ensemble_tau2/"
-   --save-interval 16
+   --hf-checkpoint "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507"
+   --ref-load "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_usim_tau2/"
+   --save-interval 32
 )
 
 ROLLOUT_ARGS=(
    --data-source-path usim.slime.data_source.get_tau2_data_source
    --rollout-function-path usim.slime.rollout.usim_generate_rollout
-   --num-rollout 100
+   --num-rollout 1000
    --rollout-batch-size 16
    --n-samples-per-prompt 8
    --rollout-max-response-len 32768
@@ -56,17 +56,14 @@ ROLLOUT_ARGS=(
    --balance-data
 )
 
+# USIM-specific arguments
+# Agent (trainable) = Qwen3-4B-Instruct via SGLang
+# User sim (fixed opponent) = gpt-5-mini via OpenAI API
 USIM_ARGS=(
    --trainable-role agent
    --max-turns 30
    --usim-domain retail
-   --usim-fixed-opponent-model "anthropic/claude-haiku-4.5,gpt-5-mini,google/gemini-3-flash-preview"
-   --usim-fixed-opponent-base-url "https://openrouter.ai/api/v1,https://api.openai.com/v1,https://openrouter.ai/api/v1"
-   --usim-fixed-opponent-api-key-var "OPENROUTER_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY"
-)
-
-TRAJECTORY_ARGS=(
-   --trajectory-output-dir "${OUTPUT_DIR}/trajectories"
+   --usim-fixed-opponent-model "gpt-5-mini"
 )
 
 PERF_ARGS=(
@@ -75,7 +72,7 @@ PERF_ARGS=(
    --pipeline-model-parallel-size 1
    --context-parallel-size 2
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 4096
+   --max-tokens-per-gpu 8192
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
@@ -96,9 +93,10 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project "${WANDB_PROJECT:-scope}"
-   --wandb-group qwen3-4B-Instruct-2507-tau2-ensemble-0403
+   --wandb-group qwen3-4B-Instruct-2507-tau2-gpt5mini-0313
 )
 
+# Eval config (template in eval_configs/, resolved at runtime)
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
 envsubst < "${PROJECT_ROOT}/eval_configs/tau2_retail_6model.yaml" > "${EVAL_CONFIG_FILE}"
 
@@ -110,7 +108,7 @@ EVAL_ARGS=(
 
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 1e-6
+   --lr 5e-7
    --lr-decay-style constant
    --weight-decay 0.1
    --adam-beta1 0.9
@@ -151,7 +149,6 @@ ray job submit --address="http://127.0.0.1:8265" \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
    ${USIM_ARGS[@]} \
-   ${TRAJECTORY_ARGS[@]} \
    ${EVAL_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \
    ${GRPO_ARGS[@]} \

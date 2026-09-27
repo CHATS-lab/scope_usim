@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# tau2-bench Verbalized Sampling Training — Qwen3-4B-Instruct
+# tau2-bench Ensemble Training — Qwen3-4B-Instruct vs 3-model rotation
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
-# User sim (fixed):  gpt-4o via OpenAI DIRECT
-#                    with Verbalized Sampling (arxiv:2510.01171)
-# Date: 2026-04-10
+# User sim (fixed): rotation of haiku-4.5, gpt-5-mini, gemini-3-flash
+# Date: 2026-04-03
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -19,7 +18,7 @@ export WEAVE_PRINT_CALL_LINK=false
 
 # Load secrets
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../../" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 if [ -f "${PROJECT_ROOT}/.env" ]; then
     set -a; source "${PROJECT_ROOT}/.env"; set +a
 fi
@@ -30,7 +29,7 @@ NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
 if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0410_tau2_verbalized_gpt4o/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0403_tau2_ensemble/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
 
@@ -41,7 +40,7 @@ source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 CKPT_ARGS=(
    --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
    --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_verbalized_gpt4o_tau2/"
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_ensemble_tau2/"
    --save-interval 16
 )
 
@@ -61,13 +60,9 @@ USIM_ARGS=(
    --trainable-role agent
    --max-turns 30
    --usim-domain retail
-   --usim-fixed-opponent-model "gpt-4o"
-   --usim-fixed-opponent-base-url "https://api.openai.com/v1"
-   --usim-fixed-opponent-api-key-var "OPENAI_API_KEY"
-   # Verbalized Sampling (arxiv:2510.01171)
-   --usim-verbalized-sampling
-   --usim-vs-num-samples 5
-   --usim-vs-method prob
+   --usim-fixed-opponent-model "anthropic/claude-haiku-4.5,gpt-5-mini,google/gemini-3-flash-preview"
+   --usim-fixed-opponent-base-url "https://openrouter.ai/api/v1,https://api.openai.com/v1,https://openrouter.ai/api/v1"
+   --usim-fixed-opponent-api-key-var "OPENROUTER_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY"
 )
 
 TRAJECTORY_ARGS=(
@@ -101,11 +96,11 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project "${WANDB_PROJECT:-scope}"
-   --wandb-group qwen3-4B-Instruct-2507-tau2-verbalized-gpt4o-0410
+   --wandb-group qwen3-4B-Instruct-2507-tau2-ensemble-0403
 )
 
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
-envsubst < "${PROJECT_ROOT}/eval_configs/tau2_retail_3model_direct.yaml" > "${EVAL_CONFIG_FILE}"
+envsubst < "${PROJECT_ROOT}/eval_configs/tau2_retail_6model.yaml" > "${EVAL_CONFIG_FILE}"
 
 EVAL_ARGS=(
    --eval-interval 16

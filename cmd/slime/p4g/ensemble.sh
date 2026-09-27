@@ -1,14 +1,9 @@
 #!/bin/bash
 
-# P4G Verbalized Sampling Training — Qwen3-4B-Instruct
+# P4G Ensemble Training — Qwen3-4B-Instruct vs 3-model rotation
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
-# User sim (fixed):  gpt-5-mini via OpenAI DIRECT (persuadee)
-#                    with Verbalized Sampling (arxiv:2510.01171)
-# Date: 2026-04-08 overnight
-#
-# NOTE: gpt-5-mini must go through api.openai.com, NOT OpenRouter.
-# litellm+OpenRouter hits an "unexpected 'usage' kwarg" error for
-# gpt-5-mini (see 0403 ensemble run fixes for background).
+# User sim (fixed): rotation of haiku-4.5, gpt-5-mini, gemini-3-flash (persuadee)
+# Date: 2026-04-03
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -23,7 +18,7 @@ export WEAVE_PRINT_CALL_LINK=false
 
 # Load secrets
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../../" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 if [ -f "${PROJECT_ROOT}/.env" ]; then
     set -a; source "${PROJECT_ROOT}/.env"; set +a
 fi
@@ -34,7 +29,7 @@ NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
 if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0408_p4g_verbalized_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0403_p4g_ensemble/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
 
@@ -45,7 +40,7 @@ source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 CKPT_ARGS=(
    --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
    --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_verbalized_gpt5mini_p4g/"
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_ensemble_p4g/"
    --save-interval 16
 )
 
@@ -64,13 +59,9 @@ ROLLOUT_ARGS=(
 P4G_ARGS=(
    --trainable-role agent
    --max-turns 10
-   --usim-fixed-opponent-model "gpt-5-mini"
-   --usim-fixed-opponent-base-url "https://api.openai.com/v1"
-   --usim-fixed-opponent-api-key-var "OPENAI_API_KEY"
-   # Verbalized Sampling (arxiv:2510.01171)
-   --usim-verbalized-sampling
-   --usim-vs-num-samples 5
-   --usim-vs-method random
+   --usim-fixed-opponent-model "anthropic/claude-haiku-4.5,gpt-5-mini,google/gemini-3-flash-preview"
+   --usim-fixed-opponent-base-url "https://openrouter.ai/api/v1,https://api.openai.com/v1,https://openrouter.ai/api/v1"
+   --usim-fixed-opponent-api-key-var "OPENROUTER_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY"
    --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus"
    --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
    --p4g-word-limit 50
@@ -108,7 +99,7 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project "${WANDB_PROJECT:-scope}"
-   --wandb-group qwen3-4B-Instruct-2507-p4g-verbalized-gpt5mini-0408
+   --wandb-group qwen3-4B-Instruct-2507-p4g-ensemble-0403
 )
 
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"

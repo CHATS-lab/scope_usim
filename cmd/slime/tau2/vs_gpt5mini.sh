@@ -1,9 +1,14 @@
 #!/bin/bash
 
-# P4G Evolving Opponents + Checkpoint Pool — Qwen3-4B-Instruct dual self-play
-# Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
-# Opponent (pool): Historical checkpoints, randomly selected (persuadee)
-# Date: 2026-04-03
+# tau2-bench Verbalized Sampling Training — Qwen3-4B-Instruct
+# Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
+# User sim (fixed):  gpt-5-mini via OpenAI DIRECT
+#                    with Verbalized Sampling (arxiv:2510.01171)
+# Date: 2026-04-08 overnight
+#
+# NOTE: gpt-5-mini must go through api.openai.com, NOT OpenRouter.
+# litellm+OpenRouter hits an "unexpected 'usage' kwarg" error for
+# gpt-5-mini.
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -18,7 +23,7 @@ export WEAVE_PRINT_CALL_LINK=false
 
 # Load secrets
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../../" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 if [ -f "${PROJECT_ROOT}/.env" ]; then
     set -a; source "${PROJECT_ROOT}/.env"; set +a
 fi
@@ -29,7 +34,7 @@ NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
 if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0403_p4g_evolving_ckpt/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0408_tau2_verbalized_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
 
@@ -40,38 +45,33 @@ source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 CKPT_ARGS=(
    --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
    --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_evolving_ckpt_p4g/"
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_verbalized_gpt5mini_tau2/"
    --save-interval 16
 )
 
 ROLLOUT_ARGS=(
-   --data-source-path usim.p4g.data_source.get_p4g_data_source
-   --rollout-function-path usim.slime.cotrain_rollout.cotrain_generate_rollout
+   --data-source-path usim.slime.data_source.get_tau2_data_source
+   --rollout-function-path usim.slime.rollout.usim_generate_rollout
    --num-rollout 100
    --rollout-batch-size 16
    --n-samples-per-prompt 8
-   --rollout-max-response-len 16384
+   --rollout-max-response-len 32768
    --rollout-temperature 0.7
    --global-batch-size 128
    --balance-data
 )
 
-COTRAIN_ARGS=(
-   --training-mode dual_selfplay
+USIM_ARGS=(
    --trainable-role agent
-   --max-turns 10
-   --no-agent-kl
-   --pool-dir "${OUTPUT_DIR}/checkpoint_pool"
-   --pool-size 10
-   --pool-save-interval 16
-   --pool-selection random
-)
-
-P4G_ARGS=(
-   --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus"
-   --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
-   --p4g-word-limit 50
-   --p4g-num-turns 10
+   --max-turns 30
+   --usim-domain retail
+   --usim-fixed-opponent-model "gpt-5-mini"
+   --usim-fixed-opponent-base-url "https://api.openai.com/v1"
+   --usim-fixed-opponent-api-key-var "OPENAI_API_KEY"
+   # Verbalized Sampling (arxiv:2510.01171)
+   --usim-verbalized-sampling
+   --usim-vs-num-samples 5
+   --usim-vs-method random
 )
 
 TRAJECTORY_ARGS=(
@@ -79,13 +79,12 @@ TRAJECTORY_ARGS=(
 )
 
 PERF_ARGS=(
-   --tensor-model-parallel-size 4
+   --tensor-model-parallel-size 1
    --sequence-parallel
    --pipeline-model-parallel-size 1
-   --context-parallel-size 1
+   --context-parallel-size 2
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 2048
-   --log-probs-chunk-size 2048
+   --max-tokens-per-gpu 4096
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
@@ -106,11 +105,11 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project "${WANDB_PROJECT:-scope}"
-   --wandb-group qwen3-4B-Instruct-2507-p4g-evolving-ckpt-0403
+   --wandb-group qwen3-4B-Instruct-2507-tau2-verbalized-gpt5mini-0408
 )
 
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
-envsubst < "${PROJECT_ROOT}/eval_configs/p4g_6model.yaml" > "${EVAL_CONFIG_FILE}"
+envsubst < "${PROJECT_ROOT}/eval_configs/tau2_retail_6model.yaml" > "${EVAL_CONFIG_FILE}"
 
 EVAL_ARGS=(
    --eval-interval 16
@@ -128,7 +127,7 @@ OPTIMIZER_ARGS=(
 )
 
 SGLANG_ARGS=(
-   --sglang-config "${PROJECT_ROOT}/configs/sglang/cotrain_4plus4.yaml"
+   --rollout-num-gpus-per-engine 1
    --sglang-mem-fraction-static 0.7
 )
 
@@ -153,18 +152,14 @@ RUNTIME_ENV_JSON="{
 
 ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
-   -- python3 -m train_cotrain_slime \
+   -- python3 -m train_usim_slime \
    --actor-num-nodes 1 \
-   --actor-num-gpus-per-node 4 \
+   --actor-num-gpus-per-node 8 \
    --colocate \
-   --offload-rollout \
-   --offload-train \
-   --save-hf "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_evolving_ckpt_p4g_hf/" \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
-   ${COTRAIN_ARGS[@]} \
-   ${P4G_ARGS[@]} \
+   ${USIM_ARGS[@]} \
    ${TRAJECTORY_ARGS[@]} \
    ${EVAL_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \

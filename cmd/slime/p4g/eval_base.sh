@@ -1,11 +1,10 @@
 #!/bin/bash
 
-# USIM Training Script — RL-Configured baseline on tau2-bench (retail)
-# Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
-# User sim (fixed): gpt-5-mini via OpenAI API + behavioral prompt prefix
+# P4G BASE POLICY EVAL — Qwen3-4B-Instruct on P4G
+# Agent (base model, no training): Qwen3-4B-Instruct-2507 via SGLang
+# Purpose: Evaluate base policy against all 6 evaluator models on P4G
 # Date: 2026-03-12
-# IMPORTANT: requires transformers<5.0.0
-# Pin transformers before training (launcher may upgrade past 5.0)
+
 pip install 'transformers>=4.51.0,<5.0.0' 2>/dev/null || true
 
 pkill -9 sglang 2>/dev/null || true
@@ -29,52 +28,23 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0312_tau2_configured/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0312_base_eval_p4g/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
 MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
 
-# Source model configuration (Instruct, rotary_base=5000000)
+# Source model configuration
 source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 
 CKPT_ARGS=(
    --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
    --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_usim_tau2/"
-   --save-interval 32
-)
-
-ROLLOUT_ARGS=(
-   --data-source-path usim.slime.data_source.get_tau2_data_source
-   --rollout-function-path usim.slime.rollout.usim_generate_rollout
-   --num-rollout 1000
-   --rollout-batch-size 16
-   --n-samples-per-prompt 8
-   --rollout-max-response-len 16384
-   --rollout-temperature 0.7
-   --global-batch-size 128
-   --balance-data
-)
-
-# USIM-specific arguments
-# Agent (trainable) = Qwen3-4B-Instruct via SGLang
-# User sim (fixed opponent) = gpt-5-mini via OpenAI API
-USIM_ARGS=(
-   --trainable-role agent
-   --max-turns 30
-   --usim-domain retail
-   --usim-fixed-opponent-model "gpt-5-mini"
-   --usim-user-prompt-prefix "IMPORTANT behavioral guidelines for this conversation:
-- Vary your personality: sometimes be patient and cooperative, sometimes frustrated and impatient, sometimes confused about what you need.
-- Occasionally give contradictory or unclear requests. Real customers often don't know exactly what they want.
-- Show realistic emotional states: anger about service issues, anxiety about deadlines, confusion about policies.
-- Sometimes refuse to follow the agent's instructions or insist on unreasonable requests.
-- Occasionally go off-topic, ask unrelated questions, or provide irrelevant information.
-- Vary your communication style: sometimes verbose, sometimes terse, sometimes formal, sometimes casual."
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_base_eval/"
+   --save-interval 9999
 )
 
 PERF_ARGS=(
@@ -101,25 +71,9 @@ GRPO_ARGS=(
    --eps-clip-high 0.28
 )
 
-WANDB_ARGS=(
-   --use-wandb
-   --wandb-project "${WANDB_PROJECT:-scope}"
-   --wandb-group qwen3-4B-Instruct-2507-tau2-configured-0312
-)
-
-# Eval config (template in eval_configs/, resolved at runtime)
-EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
-envsubst < "${PROJECT_ROOT}/eval_configs/tau2_retail_6model.yaml" > "${EVAL_CONFIG_FILE}"
-
-EVAL_ARGS=(
-   --eval-interval 16
-   --skip-eval-before-train
-   --eval-config "${EVAL_CONFIG_FILE}"
-)
-
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 1e-6
+   --lr 5e-7
    --lr-decay-style constant
    --weight-decay 0.1
    --adam-beta1 0.9
@@ -150,20 +104,50 @@ RUNTIME_ENV_JSON="{
   }
 }"
 
+P4G_EVAL_CONFIG="${OUTPUT_DIR}/eval_config_p4g.yaml"
+envsubst < "${PROJECT_ROOT}/eval_configs/p4g_6model.yaml" > "${P4G_EVAL_CONFIG}"
+
+WANDB_ARGS=(
+   --use-wandb
+   --wandb-project "${WANDB_PROJECT:-scope}"
+   --wandb-group qwen3-4B-Instruct-2507-base-eval-p4g-0312
+)
+
+echo "======================================================================"
+echo "Running P4G BASE POLICY eval..."
+echo "======================================================================"
+
 ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
-   -- python3 -m train_usim_slime \
+   -- python3 -m train_p4g_slime \
    --actor-num-nodes 1 \
-   --actor-num-gpus-per-node 8 \
-   --colocate \
+   --actor-num-gpus-per-node 2 \
+   --rollout-num-gpus 6 \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
-   ${ROLLOUT_ARGS[@]} \
-   ${USIM_ARGS[@]} \
-   ${EVAL_ARGS[@]} \
+   --data-source-path usim.p4g.data_source.get_p4g_data_source \
+   --rollout-function-path usim.p4g.rollout.p4g_generate_rollout \
+   --num-rollout 1000 \
+   --rollout-batch-size 16 \
+   --n-samples-per-prompt 8 \
+   --rollout-max-response-len 16384 \
+   --rollout-temperature 0.7 \
+   --global-batch-size 128 \
+   --balance-data \
+   --trainable-role agent \
+   --max-turns 10 \
+   --usim-fixed-opponent-model "gpt-5-mini" \
+   --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus" \
+   --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train" \
+   --p4g-word-limit 50 \
+   --p4g-num-turns 10 \
+   --eval-interval 1 \
+   --eval-config "${P4G_EVAL_CONFIG}" \
    ${OPTIMIZER_ARGS[@]} \
    ${GRPO_ARGS[@]} \
    ${PERF_ARGS[@]} \
    ${SGLANG_ARGS[@]} \
    ${MISC_ARGS[@]} \
    ${WANDB_ARGS[@]}
+
+echo "P4G base eval complete."

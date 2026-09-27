@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# P4G Training Script — Qwen3-4B-Instruct on Persuasion for Good
-# Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang (persuader)
-# User sim (fixed): gpt-5-mini via OpenAI API (persuadee)
-# Date: 2026-03-13 (0313 baseline)
+# tau2-bench Evolving Opponents + Checkpoint Pool — Qwen3-4B-Instruct dual self-play
+# Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
+# Opponent (pool): Historical checkpoints, randomly selected
+# Date: 2026-04-03
 
 pkill -9 sglang 2>/dev/null || true
 sleep 3
@@ -13,41 +13,41 @@ sleep 3
 
 set -e
 
-export PYTHONBUFFERED=1
+export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
+
+# Load secrets
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+if [ -f "${PROJECT_ROOT}/.env" ]; then
+    set -a; source "${PROJECT_ROOT}/.env"; set +a
+fi
+SLIME_DIR="${PROJECT_ROOT}/slime"
 
 # Detect NVLink
 NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
-if [ "$NVLINK_COUNT" -gt 0 ]; then
-    HAS_NVLINK=1
-else
-    HAS_NVLINK=0
-fi
+if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"
-SLIME_DIR="${PROJECT_ROOT}/slime"
-
-OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0313_p4g_gpt5mini/$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_DIR="${OUTPUT_DIR:-/scratch/usim_slime/0403_tau2_evolving_ckpt/$(date +%Y%m%d_%H%M%S)}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-/mnt/spare-workspace}"
+MODEL_DIR="${MODEL_DIR:-/mnt/spare-workspace}"
 
 mkdir -p "${OUTPUT_DIR}"
 
-# Source model configuration (Instruct, rotary_base=5000000)
 source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507"
-   --ref-load "${WORKSPACE_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_usim_p4g/"
-   --save-interval 32
+   --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
+   --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_evolving_ckpt_tau2/"
+   --save-interval 16
 )
 
 ROLLOUT_ARGS=(
-   --data-source-path usim.p4g.data_source.get_p4g_data_source
-   --rollout-function-path usim.p4g.rollout.p4g_generate_rollout
-   --num-rollout 1000
+   --data-source-path usim.slime.data_source.get_tau2_data_source
+   --rollout-function-path usim.slime.tau2_cotrain_rollout.tau2_cotrain_generate_rollout
+   --num-rollout 100
    --rollout-batch-size 16
    --n-samples-per-prompt 8
    --rollout-max-response-len 32768
@@ -56,24 +56,34 @@ ROLLOUT_ARGS=(
    --balance-data
 )
 
-# P4G-specific arguments
-P4G_ARGS=(
+COTRAIN_ARGS=(
+   --training-mode dual_selfplay
    --trainable-role agent
-   --max-turns 10
-   --usim-fixed-opponent-model "gpt-5-mini"
-   --p4g-corpus-path "${PROJECT_ROOT}/data/p4g/corpus"
-   --p4g-dataset-dir "${PROJECT_ROOT}/data/p4g/train"
-   --p4g-word-limit 50
-   --p4g-num-turns 10
+   --max-turns 30
+   --cooperative-reward
+   --no-agent-kl
+   --pool-dir "${OUTPUT_DIR}/checkpoint_pool"
+   --pool-size 10
+   --pool-save-interval 16
+   --pool-selection random
+)
+
+TAU2_ARGS=(
+   --usim-domain retail
+)
+
+TRAJECTORY_ARGS=(
+   --trajectory-output-dir "${OUTPUT_DIR}/trajectories"
 )
 
 PERF_ARGS=(
-   --tensor-model-parallel-size 1
+   --tensor-model-parallel-size 4
    --sequence-parallel
    --pipeline-model-parallel-size 1
-   --context-parallel-size 2
+   --context-parallel-size 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 8192
+   --max-tokens-per-gpu 2048
+   --log-probs-chunk-size 2048
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
@@ -94,12 +104,11 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project "${WANDB_PROJECT:-scope}"
-   --wandb-group qwen3-4B-Instruct-2507-p4g-gpt5mini-0313
+   --wandb-group qwen3-4B-Instruct-2507-tau2-evolving-ckpt-0403
 )
 
-# Eval config (template in eval_configs/, resolved at runtime)
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
-envsubst < "${PROJECT_ROOT}/eval_configs/p4g_6model.yaml" > "${EVAL_CONFIG_FILE}"
+envsubst < "${PROJECT_ROOT}/eval_configs/tau2_retail_6model.yaml" > "${EVAL_CONFIG_FILE}"
 
 EVAL_ARGS=(
    --eval-interval 16
@@ -109,7 +118,7 @@ EVAL_ARGS=(
 
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 5e-7
+   --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
    --adam-beta1 0.9
@@ -117,7 +126,7 @@ OPTIMIZER_ARGS=(
 )
 
 SGLANG_ARGS=(
-   --rollout-num-gpus-per-engine 1
+   --sglang-config "${PROJECT_ROOT}/configs/sglang/cotrain_4plus4.yaml"
    --sglang-mem-fraction-static 0.7
 )
 
@@ -142,14 +151,19 @@ RUNTIME_ENV_JSON="{
 
 ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
-   -- python3 -m train_p4g_slime \
+   -- python3 -m train_cotrain_slime \
    --actor-num-nodes 1 \
-   --actor-num-gpus-per-node 2 \
-   --rollout-num-gpus 6 \
+   --actor-num-gpus-per-node 4 \
+   --colocate \
+   --offload-rollout \
+   --offload-train \
+   --save-hf "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_evolving_ckpt_tau2_hf/" \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
-   ${P4G_ARGS[@]} \
+   ${COTRAIN_ARGS[@]} \
+   ${TAU2_ARGS[@]} \
+   ${TRAJECTORY_ARGS[@]} \
    ${EVAL_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \
    ${GRPO_ARGS[@]} \
