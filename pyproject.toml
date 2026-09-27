@@ -5,13 +5,22 @@ build-backend = "hatchling.build"
 [project]
 name = "usim"
 version = "0.1.0"
-description = "SCOPE: mitigating simulator collapse in multi-agent reinforcement learning"
+description = "SCOPE: Self-Play with Co-Evolving Users Prevents Simulator Collapse in Multi-Agent RL"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 keywords = ["reinforcement-learning", "user-simulation", "multi-agent", "simulator-collapse", "tau-bench"]
 authors = [
   { name = "Simon Yu" },
+  { name = "Nicholas Tomlin" },
+  { name = "Marwa Abdulhai" },
+  { name = "Ximing Lu" },
+  { name = "Derek Chong" },
+  { name = "Abe Hou" },
+  { name = "Dilara Soylu" },
+  { name = "Sergey Levine" },
+  { name = "Christopher D. Manning" },
+  { name = "Weiyan Shi" },
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -23,34 +32,50 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-# Core dependencies (minimal, framework-agnostic)
+# Imported by the core package and the P4G environment.
 dependencies = [
   "numpy>=1.24.0",
-  "tqdm>=4.65.0",
   "weave",
   "litellm>=1.65.0",
 ]
 
 [project.optional-dependencies]
-# Slime backend dependencies
+# Slime training backend: rollout functions, co-training loop, SGLang clients.
+# Slime itself (and with it Ray, SGLang, Megatron bindings) is installed from
+# the pinned submodule: pip install -e ./slime
 slime = [
-  "transformers>=4.36.0",
+  "transformers>=4.51.0,<5.0.0",
   "aiohttp>=3.9.0",
+  "requests>=2.28.0",
 ]
 
-# tau2-bench integration
+# Persuasion for Good: persona loading from the ConvoKit corpus in data/p4g/.
+p4g = [
+  "convokit",
+]
+
+# tau2-bench: packages the usim tau2 code imports directly. tau2-bench itself
+# is not on PyPI; install the pinned submodule: pip install -e ./external/tau2-bench
 tau2 = [
-  "pydantic>=2.0.0",
+  "loguru>=0.7.0",
 ]
 
-# CooperBench integration (cooperbench itself installed via pip install -e ../CooperBench)
+# CooperBench: Redis messaging and Modal sandboxes. CooperBench itself comes
+# from the pinned submodule: pip install -e ./external/CooperBench
 cooperbench = [
   "redis>=5.0.0",
+  "modal",
 ]
 
-# Docent integration (trajectory analysis)
+# Optional upload of rollout trajectories to Docent (--docent-collection).
 docent = [
   "docent-python>=0.1.0",
+]
+
+# scripts/diagnostics/measure_coverage.py (embedding + clustering).
+diagnostics = [
+  "sentence-transformers",
+  "scikit-learn",
 ]
 
 # Development dependencies
@@ -65,7 +90,7 @@ dev = [
 
 # All optional dependencies
 all = [
-  "usim[slime,tau2,cooperbench,docent]",
+  "usim[slime,p4g,tau2,cooperbench,docent,diagnostics]",
 ]
 
 # Full development setup
@@ -79,9 +104,6 @@ Homepage = "https://github.com/CHATS-lab/scope_usim"
 Documentation = "https://github.com/CHATS-lab/scope_usim#readme"
 Issues = "https://github.com/CHATS-lab/scope_usim/issues"
 Source = "https://github.com/CHATS-lab/scope_usim"
-
-[project.scripts]
-usim-slime-train = "usim.slime.rollout:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["usim"]
