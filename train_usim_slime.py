@@ -47,27 +47,6 @@ def add_usim_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
     group.add_argument(
-        "--user-model",
-        type=str,
-        default=None,
-        help="Optional separate model for user simulator (uses agent model if not set)",
-    )
-
-    group.add_argument(
-        "--usim-temperature",
-        type=float,
-        default=0.7,
-        help="Temperature for user simulator generation",
-    )
-
-    group.add_argument(
-        "--usim-max-tokens",
-        type=int,
-        default=2048,
-        help="Max tokens per user simulator generation",
-    )
-
-    group.add_argument(
         "--usim-fixed-opponent-model",
         type=str,
         default=None,

@@ -65,13 +65,6 @@ def add_cotrain_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     )
 
     mode_group.add_argument(
-        "--opponent-num-gpus",
-        type=int,
-        default=None,
-        help="Number of GPUs for opponent (defaults to actor GPU count)",
-    )
-
-    mode_group.add_argument(
         "--opponent-num-nodes",
         type=int,
         default=1,
