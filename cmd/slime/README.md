@@ -1,100 +1,202 @@
 # SCOPE experiment launchers
 
-This directory contains the Slime launchers used to train and evaluate SCOPE. The table below is the camera-ready entry point; older dated configurations remain available as an archival record of development runs.
+Each script in this directory starts one Slime training or evaluation run for
+an experiment in the paper. Run them from anywhere; they locate the repository
+root from their own path.
 
 > [!WARNING]
-> The training launchers are intended for a dedicated GPU node. They stop existing Ray and SGLang processes before starting a run and, unless edited, reserve all eight visible GPUs.
+> The launchers assume a dedicated 8-GPU Linux node. Before starting, each one
+> runs `pkill -9 sglang`, `ray stop --force` and `pkill -9 ray`, which kills
+> every SGLang and Ray process on the machine, and then starts a new Ray head
+> that claims all eight GPUs. Set `SKIP_PROCESS_CLEANUP=1` to skip the kill
+> step when you manage Ray yourself.
+
+## Layout
+
+```text
+cmd/slime/
+├── p4g/            # Persuasion for Good, Qwen3-4B-Instruct-2507
+├── tau2/           # tau2-bench retail, Qwen3-4B-Instruct-2507
+├── ablations/      # appendix ablations (tau2-bench retail)
+├── cooperbench/    # CooperBench, Qwen3.5-27B
+└── eval_base.sh    # untrained-policy evaluation on tau2-bench, then P4G
+```
+
+The paper calls the two training-time methods Self-Play and Population
+Self-Play. The code keeps its original identifiers: Self-Play is
+`train_cotrain_slime.py --training-mode dual_cotrain`, and Population Self-Play
+is `--training-mode dual_selfplay` with the `--pool-*` flags. Module names such
+as `usim.slime.cotrain_rollout` use the same `cotrain` prefix.
 
 ## Prerequisites
 
-- Linux with eight CUDA GPUs for the released configurations
+- Linux with eight CUDA GPUs
 - Python 3.10 or newer
-- Megatron-LM at `/root/Megatron-LM`, or an equivalent path reflected in the launcher's `RUNTIME_ENV_JSON`
-- the initialized `slime` and benchmark submodules
-- Qwen Hugging Face and Megatron `torch_dist` checkpoints
-- API keys for the fixed simulators and held-out evaluation panel
+- Megatron-LM at `/root/Megatron-LM` (the Slime Docker image puts it there),
+  or edit `PYTHONPATH` in the launcher's `RUNTIME_ENV_JSON`
+- the `slime` and benchmark submodules
+- Hugging Face and Megatron `torch_dist` checkpoints of the policy model
+- API keys for the frozen simulators and the evaluation panel
 
 From the repository root:
 
 ```bash
 git submodule update --init --recursive
-pip install -e ".[slime,tau2]"
+pip install -e ".[slime,p4g,tau2]"
 pip install -e ./slime
 pip install -e ./external/tau2-bench
-pip install openai convokit
 ```
 
-The launchers source model arguments from `slime/scripts/models/`. For Qwen3-4B-Instruct-2507, place these directories under `MODEL_DIR`:
+For CooperBench, add `pip install -e ".[cooperbench]" -e ./external/CooperBench`.
+
+Put the checkpoints under `MODEL_DIR`. The Qwen3-4B launchers expect:
 
 ```text
-Qwen3-4B-Instruct-2507/
-Qwen3-4B-Instruct-2507_torch_dist/
+$MODEL_DIR/Qwen3-4B-Instruct-2507/
+$MODEL_DIR/Qwen3-4B-Instruct-2507_torch_dist/
 ```
 
-Use Slime's conversion tools if only the Hugging Face checkpoint is available.
+The CooperBench launcher expects `Qwen3.5-27B/` and `Qwen3.5-27B_torch_dist/`.
+Slime's conversion tools produce the `torch_dist` copy from the Hugging Face
+checkpoint. Model architecture flags come from `slime/scripts/models/`.
 
 ## Environment
 
-Set paths and credentials explicitly before launching:
-
 ```bash
 export MODEL_DIR="/path/to/model-checkpoints"
-export WORKSPACE_DIR="/path/to/workspace"
-export OUTPUT_DIR="/path/to/run-output"
+export OUTPUT_DIR="/path/to/run-output"      # optional
 
 export OPENAI_API_KEY="<your OpenAI API key>"
 export OPENROUTER_API_KEY="<your OpenRouter API key>"
 
 export WANDB_PROJECT="scope"
-export WANDB_ENTITY="<optional W&B team or username>"
-# Use this instead when logging should remain local:
-# export WANDB_MODE="offline"
+# export WANDB_MODE="offline"                # keep W&B logging local
 ```
 
-| Variable | Purpose | Launcher default |
+| Variable | Purpose | Default |
 | --- | --- | --- |
-| `MODEL_DIR` | Hugging Face and `torch_dist` model checkpoints | `/mnt/spare-workspace` |
-| `WORKSPACE_DIR` | shared working storage used by some launchers | `/mnt/spare-workspace` |
-| `OUTPUT_DIR` | checkpoints, generated eval configs, and run logs | a timestamped `/scratch/usim_slime/...` directory |
-| `OPENAI_API_KEY` | GPT simulator calls | none |
-| `OPENROUTER_API_KEY` | non-OpenAI simulators and held-out evaluation | none |
-| `WANDB_PROJECT` | W&B project name | `scope` |
-| `WANDB_ENTITY` | optional W&B account or team | W&B client default |
+| `MODEL_DIR` | Hugging Face and `torch_dist` checkpoints | none; the launcher exits if unset |
+| `OUTPUT_DIR` | checkpoints, the resolved eval config, trajectories | `results/<run>/<timestamp>` in the repository |
+| `OPENAI_API_KEY` | GPT-5-mini and GPT-4o simulators and evaluators | none |
+| `OPENROUTER_API_KEY` | Claude Haiku 4.5, Gemini 3 Flash and the other panel models | none |
+| `ANTHROPIC_API_KEY` | `ablations/vs_haiku_tau2.sh` only (Anthropic API directly) | none |
+| `WANDB_PROJECT` | W&B project | `scope` |
+| `SKIP_PROCESS_CLEANUP` | set to `1` to skip the SGLang/Ray kill step | `0` |
+| `COOPERBENCH_SETTING` | `baseline`, `solo` or `coop` for the CooperBench launcher | `solo` |
+| `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Modal sandboxes for CooperBench | none |
 
-## Camera-ready launcher index
+Launchers that came from the April runs (`ensemble`, `vs_*`,
+`population_self_play`, the ablations) also source `.env` from the repository
+root when it exists.
 
-### P4G and tau2-bench
+## Paper experiments and their launchers
 
-| Method | P4G | tau2-bench retail |
+Paths are relative to `cmd/slime/`. Qwen3-4B-Instruct-2507 is the policy unless
+a row says otherwise. "None" means no launcher for that setting exists in this
+release or in the development history it was cut from.
+
+### Main results (Persuasion for Good and tau2-bench)
+
+| Paper result | P4G | tau2-bench retail |
 | --- | --- | --- |
-| RL (single GPT-5-mini simulator) | [`qwen3_4b_instruct/0313/baseline/p4g/train_gpt5mini.sh`](qwen3_4b_instruct/0313/baseline/p4g/train_gpt5mini.sh) | [`qwen3_4b_instruct/0313/baseline/tau2/train_gpt5mini.sh`](qwen3_4b_instruct/0313/baseline/tau2/train_gpt5mini.sh) |
-| Persona-guided | P4G scenarios already contain personas | [`qwen3_4b_instruct/0312/train_tau2_configured.sh`](qwen3_4b_instruct/0312/train_tau2_configured.sh) |
-| Verbalized Sampling | [`qwen3_4b_instruct/0403/verbalized_gpt5mini/p4g/train.sh`](qwen3_4b_instruct/0403/verbalized_gpt5mini/p4g/train.sh) | [`qwen3_4b_instruct/0403/verbalized_gpt5mini/tau2/train.sh`](qwen3_4b_instruct/0403/verbalized_gpt5mini/tau2/train.sh) |
-| Frozen ensemble | [`qwen3_4b_instruct/0403/ensemble/p4g/train.sh`](qwen3_4b_instruct/0403/ensemble/p4g/train.sh) | [`qwen3_4b_instruct/0403/ensemble/tau2/train.sh`](qwen3_4b_instruct/0403/ensemble/tau2/train.sh) |
-| Co-Training | [`qwen3_4b_instruct/0417/train_p4g_cotrain.sh`](qwen3_4b_instruct/0417/train_p4g_cotrain.sh) | [`qwen3_4b_instruct/0417/train_tau2_cotrain_curriculum.sh`](qwen3_4b_instruct/0417/train_tau2_cotrain_curriculum.sh) |
-| Population Co-Training | [`qwen3_4b_instruct/0403/evolving_checkpoint/p4g/train.sh`](qwen3_4b_instruct/0403/evolving_checkpoint/p4g/train.sh) | [`qwen3_4b_instruct/0403/evolving_checkpoint/tau2/train.sh`](qwen3_4b_instruct/0403/evolving_checkpoint/tau2/train.sh) |
+| Base (untrained) | `p4g/eval_base.sh` | `eval_base.sh` (tau2, then P4G) |
+| RL (Single), GPT-5-mini simulator | `p4g/rl_single_gpt5mini.sh` | `tau2/rl_single_gpt5mini.sh` |
+| Persona-Guided | not applicable (P4G tasks already carry personas) | `tau2/persona_guided.sh` |
+| Ensemble, K=3 | `p4g/ensemble.sh` | `tau2/ensemble.sh` |
+| Verbalized Sampling, GPT-5-mini | `p4g/vs_gpt5mini.sh` | `tau2/vs_gpt5mini.sh` |
+| Self-Play | `p4g/self_play.sh` | `tau2/self_play.sh` |
+| Population Self-Play | `p4g/population_self_play.sh` | `tau2/population_self_play.sh` |
+| tau2-bench airline column | | None: every tau2 launcher sets `--usim-domain retail` |
+| Qwen3-8B rows and the Qwen3-8B tau2 figure | None | None |
 
-For example:
+The training curves in the main figure come from the same runs.
 
-```bash
-bash cmd/slime/qwen3_4b_instruct/0403/verbalized_gpt5mini/tau2/train.sh
-```
+### Single-simulator collapse
+
+| Simulator | P4G | tau2-bench retail |
+| --- | --- | --- |
+| GPT-5-mini | `p4g/rl_single_gpt5mini.sh` | `tau2/rl_single_gpt5mini.sh` |
+| Claude Haiku 4.5 | `p4g/rl_single_haiku.sh` | `tau2/rl_single_haiku.sh` |
+| Gemini 3 Flash | `p4g/rl_single_gemini.sh` | `tau2/rl_single_gemini.sh` |
 
 ### CooperBench
 
-The released Qwen3.5-27B configuration is:
+| Paper result | Launcher |
+| --- | --- |
+| Cross-play with a frozen partner, Qwen3.5-27B | `COOPERBENCH_SETTING=coop cooperbench/train_qwen3_5_27b.sh` (the partner is `gemini-3-flash-preview`) |
+| Cross-play with Claude Haiku 4.5 as partner | None; change `--cooperbench-partner-model` |
+| Cross-play ensemble (K=3), Self-Play, Population Self-Play | None; `train_cooperbench_slime.py` takes a single API partner and has no trainable-partner or pool mode |
+| Any Qwen3.5-9B run | None |
+| Qwen3.5-27B with Tinker and LoRA adapters | None; the 27B launcher trains all weights with Slime and Megatron |
 
-```bash
-pip install -e ./external/CooperBench
-COOPERBENCH_SETTING=coop \
-  bash cmd/slime/qwen3_5_27b/0304/train_cooperbench.sh
-```
+The cooperative setting also needs a Redis server (the launcher starts one if
+none answers) and Modal credentials for the sandboxes.
 
-`COOPERBENCH_SETTING` accepts `baseline`, `solo`, or `coop`. The cooperative configuration also needs a running Redis service and a configured sandbox backend.
+### Appendix ablations
 
-## Co-Training compatibility patch
+| Paper result | Launcher |
+| --- | --- |
+| Verbalized Sampling against RL (Single), GPT-5-mini | `tau2/vs_gpt5mini.sh` and `tau2/rl_single_gpt5mini.sh` (P4G: the `p4g/` pair) |
+| Verbalized Sampling with Claude Haiku 4.5 | `ablations/vs_haiku_tau2.sh` |
+| Verbalized Sampling with GPT-4o | `ablations/vs_gpt4o_tau2.sh` |
+| Verbalized Sampling with GPT-5 | None |
+| Simulator reward: curriculum | `tau2/self_play.sh` (`--tau2-user-reward-mode curriculum`) |
+| Simulator reward: cooperative | `ablations/sim_reward_cooperative_tau2.sh` |
+| Simulator reward: adversarial | None; the tau2 co-training rollout has no adversarial reward mode |
+| Pool size K in {1, 3, 5, 10} | None; both pool launchers use `--pool-size 10 --pool-save-interval 16` |
+| Reward-quadrant swaps | None |
+| OLMo-3-7B-Instruct | None |
 
-Dual-model Co-Training needs the per-server engine routing in [`patches/slime_cotrain_combined.patch`](../../patches/slime_cotrain_combined.patch). Apply it once to the pinned Slime submodule:
+The Haiku and GPT-4o Verbalized Sampling runs evaluate on
+`eval_configs/tau2_retail_3model_direct.yaml` (Claude Haiku 4.5, GPT-4o and
+GPT-5-mini through their own APIs) instead of the 6-model panel. The
+cooperative-reward run is not a one-flag change from the curriculum run: it
+also uses `--trainable-role agent`, `--no-agent-kl`, 100 rollouts and a KL
+coefficient of 0.01.
+
+### Human study
+
+The study app lives in [`../../human_study/`](../../human_study/README.md). It
+serves trained checkpoints through OpenAI-compatible endpoints and defines the
+conditions `base`, `rl_single` and `cotraining` (Self-Play); it has no
+Verbalized Sampling condition.
+
+## Launcher settings
+
+The paper lists shared settings of 250 training steps, learning rate 1e-6 and a
+KL coefficient of 0.005. The launchers were not all run with those values:
+
+| Launchers | `--lr` | `--num-rollout` | `--kl-loss-coef` | Notes |
+| --- | --- | --- | --- | --- |
+| `*/rl_single_*.sh` | 5e-7 | 1000 | 0.01 | |
+| `tau2/persona_guided.sh` | 1e-6 | 1000 | 0.01 | max response length 16384 |
+| `*/ensemble.sh`, `*/vs_gpt5mini.sh` | 1e-6 | 100 | 0.01 | P4G max response length 16384 |
+| `*/self_play.sh` | 1e-6 | 500 | 0.005 | both roles trained |
+| `*/population_self_play.sh` | 1e-6 | 100 | 0.01 | `--no-agent-kl`, `--pool-size 10`, `--pool-save-interval 16` |
+| `ablations/vs_*_tau2.sh` | 1e-6 | 100 | 0.01 | `--usim-vs-method prob` |
+| `cooperbench/train_qwen3_5_27b.sh` | 1e-6 | 500 | 0.01 | no evaluation during training |
+
+All Qwen3-4B launchers use 16 prompts per rollout batch, 8 samples per prompt,
+a global batch of 128, rollout temperature 0.7 and evaluation every 16 steps
+(the CooperBench launcher uses 8 prompts and a global batch of 64).
+
+Verbalized Sampling is controlled by `--usim-verbalized-sampling`,
+`--usim-vs-num-samples` and `--usim-vs-method`. With `prob` the simulator lists
+candidates with verbalized probabilities and one is drawn in proportion to them;
+with `random` the prompt asks for candidates without probabilities and one is
+drawn uniformly. The two `vs_gpt5mini.sh` launchers use `random`.
+
+The base-evaluation scripts measure the untrained policy at rollout 0
+(`--eval-interval 1` without `--skip-eval-before-train`). The job then keeps
+training; stop it with `ray job stop` once the rollout-0 evaluation is logged.
+`eval_base.sh` starts its P4G job only after the tau2 job ends.
+
+## Self-Play compatibility patch
+
+Self-Play and Population Self-Play (`dual_cotrain`, `dual_selfplay`) need the
+per-server engine routing in
+[`patches/slime_cotrain_combined.patch`](../../patches/slime_cotrain_combined.patch).
+Apply it once to the pinned Slime submodule:
 
 ```bash
 git -C slime apply --check ../patches/slime_cotrain_combined.patch
@@ -107,32 +209,31 @@ To check whether it is already applied:
 git -C slime apply --reverse --check ../patches/slime_cotrain_combined.patch
 ```
 
-Do not commit the patched Slime worktree into this repository; the superproject continues to pin the upstream submodule commit and records the compatibility change as a reviewable patch.
+Do not commit the patched Slime worktree. The superproject pins the upstream
+submodule commit and keeps the change as a reviewable patch.
 
 ## What each run writes
 
-Each launcher creates a unique `OUTPUT_DIR` containing:
+Each launcher creates `OUTPUT_DIR` with:
 
 - model checkpoints
-- a resolved evaluation-panel YAML generated from `eval_configs/`
-- Slime/Ray logs and tracker metadata
+- the evaluation-panel YAML resolved from `eval_configs/`
+- Slime and Ray logs, trajectory JSONL files where `--trajectory-output-dir`
+  is set, and tracker metadata
 
-Generated results are intentionally ignored by Git. Move only final aggregate artifacts into a separate archival location; do not commit API responses, W&B caches, or human-study records.
+`results/` is ignored by Git. Keep API responses, W&B caches and human-study
+records out of the repository.
 
 ## Static validation
 
-Validate launchers without allocating GPUs or starting services:
+Check the launchers without allocating GPUs:
 
 ```bash
-git ls-files -z 'cmd/slime/**/*.sh' | xargs -0 -n1 bash -n
+git ls-files -z 'cmd/*.sh' | xargs -0 -n1 bash -n
 ```
 
-Then run the Python test suite from the repository root:
+Then run the Python tests from the repository root:
 
 ```bash
 pytest -q
 ```
-
-## Historical configurations
-
-Directories named `0206`, `0220`, `0226`, and the non-indexed variants under later dates capture earlier ablations, model providers, and infrastructure assumptions. They are kept for provenance, but the camera-ready table above is the supported reproduction surface. In particular, historical scripts may require different checkpoint locations, GPU partitions, or provider-specific API routing.
