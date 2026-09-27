@@ -1,0 +1,64 @@
+SCOPE
+Copyright 2026 The SCOPE Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The repository pins the following projects as git submodules. They are not
+part of this product's own source files and remain under their own licenses:
+
+  slime/                 Slime, https://github.com/THUDM/slime
+                         Apache License 2.0, Copyright 2025 Zhipu AI
+  external/tau2-bench/   tau2-bench, https://github.com/sierra-research/tau2-bench
+                         MIT License, Copyright (c) 2025 Sierra Research
+  external/CooperBench/  CooperBench (fork at https://github.com/simonucl/CooperBench
+                         of https://github.com/cooperbench/CooperBench)
+                         MIT License
+
+Portions of this product are adapted from third-party work:
+
+  * usim/slime/cotrain_loop.py composes Slime's placement-group, rollout-manager
+    and training-actor APIs and follows the structure of Slime's train.py and
+    train_async.py. patches/slime_cotrain_combined.patch modifies Slime source
+    files. Slime is licensed under the Apache License 2.0,
+    Copyright 2025 Zhipu AI.
+
+  * usim/cooperbench/agent.py translates the mini-swe-agent-v2 prompt templates
+    shipped with CooperBench (src/cooperbench/agents/mini_swe_agent_v2/config/
+    mini.yaml) into Python. data/cooperbench/*.json contain task and feature
+    descriptions taken from the CooperBench dataset. CooperBench is licensed
+    under the MIT License.
+
+  * human_study/tasks/tau2_retail.yaml and human_study/tasks/tau2_airline.yaml
+    are rendered from tau2-bench task definitions, and the human-study backend
+    calls tau2-bench environments and tools. tau2-bench is licensed under the
+    MIT License, Copyright (c) 2025 Sierra Research.
+
+  * human_study/frontend/src/components/Markdown.tsx follows the heading, list
+    and paragraph styles of OpenHands (https://github.com/All-Hands-AI/OpenHands),
+    MIT License.
+
+  * data/p4g/ contains the Persuasion for Good corpus in ConvoKit format
+    (Wang et al., 2019; https://gitlab.com/ucdavisnlp/persuasionforgood,
+    converted by the ConvoKit developers) and per-dialogue files derived from
+    it. The corpus is licensed under the Apache License 2.0. See
+    data/README.md.
+
+MIT License text (applies to the MIT-licensed portions listed above):
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
