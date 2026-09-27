@@ -1,9 +1,9 @@
 # USIM Human Study Platform
 
 Custom chat interface for running the Prolific-based human evaluation described
-in the SCOPE paper (Appendix D). Inspired by the annotation interface in
-Mind the Sim2Real Gap (Zhou et al. 2026) — two panels, chat on the left, task
-instructions on the right, `/stop` to end and submit a survey.
+in the human-study appendix of the SCOPE paper. Inspired by the annotation
+interface in Mind the Sim2Real Gap (Zhou et al. 2026): two panels, chat on the
+left, task instructions on the right, `/stop` to end and submit a survey.
 
 ## Layout
 
@@ -38,25 +38,34 @@ open "http://localhost:3000/study?PROLIFIC_PID=test&STUDY_ID=s&SESSION_ID=x&task
 ## Prolific URL template
 
 ```
-https://study.your-domain.com/study?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}&task_type=tau2
+https://study.example.org/study?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}&task_type=tau2
 ```
 
-Condition (Base / RL-Single / Co-training) is assigned server-side on session
-creation, stratified to keep cell counts balanced.
+Replace `study.example.org` with your own deployment's domain.
 
-## Known open items
+The backend assigns a condition server-side on session creation, stratified to
+keep cell counts balanced. It defines three conditions: `base`, `rl_single`,
+and `cotraining` (the paper's Self-Play policy). Each condition is served by
+its own `MODEL_*` / `OPENAI_BASE_URL_*` pair in `backend/.env`. The app has no
+Verbalized Sampling condition; see the note below.
+
+## Configuration notes
 
 - τ²-bench tool dispatch uses a direct wrapper around tau2-bench's `Environment`
   object (see `backend/app/services/tau2_tools.py`). The import path assumes
   tau2-bench is installed in the same venv. If you hit import errors, fall back
-  to the P4G flow which has no tool dependency.
-- OpenAI models are placeholders (`gpt-5.4`). Swap to our SGLang endpoints by
-  setting `OPENAI_BASE_URL_*` and `MODEL_*` in `backend/.env`.
-- Task pool files in `tasks/tau2_*.yaml` are stubs. Run
-  `scripts/seed_tau2_tasks.py` once `tau2-bench` is on the PYTHONPATH.
-
-## Related docs
-
-- Plan: `~/notes/projects/usim_human_study.md`
-- IRB: `~/Downloads/Usim -- IRB/human_study_plan.md`
-- Paper appendix: `scope_paper/neurips2026_conference.tex` (Appendix D)
+  to the P4G flow, which has no tool dependency.
+- `backend/.env.example` points every condition at the placeholder model
+  `gpt-5.4`. To serve trained checkpoints, set `MODEL_*` and
+  `OPENAI_BASE_URL_*` to your OpenAI-compatible (for example SGLang) endpoints.
+- The task pools in `tasks/` are populated: 15 retail and 15 airline τ²-bench
+  scenarios and 30 P4G personas. Regenerate them with
+  `scripts/seed_tau2_tasks.py` (needs `tau2-bench` on the `PYTHONPATH`) and
+  `scripts/seed_p4g_tasks.py`.
+- The paper's human study reports a fourth condition, Verbalized Sampling.
+  This app only defines `base`, `rl_single`, and `cotraining`, so running that
+  arm needs an extra `Condition` value and model entry in the backend.
+- `scripts/smoke_test_live.py` and `scripts/capture_screenshots.py` create real
+  sessions (and, for the screenshot script, survey responses) in the database
+  of whatever deployment you point them at. Both require an explicit
+  `--base-url`; do not point them at a deployment that is collecting study data.

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Configure Cloudflare Tunnel for usim-study.chats-lab.org.
+# Configure a Cloudflare Tunnel that serves the study at $STUDY_DOMAIN.
 #
 # Run AFTER you've completed `cloudflared tunnel login` interactively on
 # the VPS (that writes ~/.cloudflared/cert.pem on the VPS, which is what
 # `tunnel create` and `tunnel route dns` need).
 #
-# Usage: ./deploy/setup_tunnel.sh
+# Usage: SSH_HOST=<your-vps> STUDY_DOMAIN=study.example.org ./deploy/setup_tunnel.sh
 set -euo pipefail
 
-SSH_HOST="${SSH_HOST:-usim-study}"
+SSH_HOST="${SSH_HOST:?set SSH_HOST to the SSH host of your VPS}"
 TUNNEL_NAME="${TUNNEL_NAME:-usim-study}"
-HOSTNAME="${HOSTNAME_FQDN:-usim-study.chats-lab.org}"
+HOSTNAME="${STUDY_DOMAIN:?set STUDY_DOMAIN to the public hostname, e.g. study.example.org}"
 
 echo "==> Installing cloudflared on VPS (if needed)"
 ssh "$SSH_HOST" bash <<'REMOTE'

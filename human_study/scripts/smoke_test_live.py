@@ -1,17 +1,23 @@
-"""End-to-end smoke test against the live deployment.
+"""End-to-end smoke test against a running deployment.
 
 Creates fresh sessions with synthetic PIDs until all 3 conditions are covered,
 then sends one chat message per condition and reports whether the assigned
 model produced a real response (non-empty content or a tool call).
 
+The sessions it creates are written to the target deployment's database and
+count toward its condition balancing, so point it at a local or staging stack,
+not at a deployment that is collecting study data. There is no default target.
+
 Usage:
-    python scripts/smoke_test_live.py
-    python scripts/smoke_test_live.py --base-url https://usim-study.chats-lab.org/api --task-type p4g
+    python scripts/smoke_test_live.py --base-url http://localhost:8000
+    python scripts/smoke_test_live.py --base-url https://study.example.org/api --task-type p4g
+    STUDY_API_URL=https://study.example.org/api python scripts/smoke_test_live.py
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import time
 import uuid
 from typing import Any
@@ -112,9 +118,17 @@ async def main_async(args):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--base-url", default="https://usim-study.chats-lab.org/api")
+    p.add_argument(
+        "--base-url",
+        default=os.environ.get("STUDY_API_URL"),
+        help="backend API root, e.g. http://localhost:8000 or https://study.example.org/api "
+        "(default: $STUDY_API_URL; required)",
+    )
     p.add_argument("--task-type", choices=["tau2", "p4g"], default="tau2")
     args = p.parse_args()
+    if not args.base_url:
+        p.error("--base-url (or STUDY_API_URL) is required")
+    args.base_url = args.base_url.rstrip("/")
     import sys
     sys.exit(asyncio.run(main_async(args)))
 

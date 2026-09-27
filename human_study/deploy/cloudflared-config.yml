@@ -1,5 +1,5 @@
-# Cloudflare Tunnel config. Deploy as /etc/cloudflared/config.yml on the Vultr
-# box, after running `cloudflared tunnel create usim-study` and replacing the
+# Cloudflare Tunnel config. Deploy as /etc/cloudflared/config.yml on the
+# VPS, after running `cloudflared tunnel create usim-study` and replacing the
 # UUIDs below.
 #
 # Setup steps on the VPS:
@@ -9,7 +9,7 @@
 #   4. cloudflared tunnel create usim-study
 #   5. Put the resulting credentials JSON at /etc/cloudflared/usim-study.json
 #   6. Copy this file to /etc/cloudflared/config.yml and edit the UUID + hostname
-#   7. cloudflared tunnel route dns usim-study study.your-domain.com
+#   7. cloudflared tunnel route dns usim-study study.example.org
 #   8. sudo cloudflared service install
 #   9. sudo systemctl enable --now cloudflared
 
@@ -19,6 +19,6 @@ credentials-file: /etc/cloudflared/usim-study.json
 ingress:
   # The frontend handles static assets + SSR. The Next.js config rewrites
   # /api/* to the backend, so we don't need a second ingress rule here.
-  - hostname: study.your-domain.com
+  - hostname: study.example.org
     service: http://127.0.0.1:3000
   - service: http_status:404

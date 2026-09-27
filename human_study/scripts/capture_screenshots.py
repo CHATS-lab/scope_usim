@@ -1,22 +1,29 @@
 """Capture three light-mode screenshots of the human-study UI for the paper.
 
-Drives the live deployment at https://usim-study.chats-lab.org, creates fresh
-sessions for each screenshot via the API, drives each session to the correct
-UI state (chatting / survey / debrief), and saves PNGs to a configurable
-output directory.
+Drives a running deployment (given by --base-url), creates fresh sessions for
+each screenshot via the API, drives each session to the correct UI state
+(chatting / survey / debrief), and saves PNGs to a configurable output
+directory. The sessions and the submitted survey are written to that
+deployment's database, so use a local or staging stack, not one that is
+collecting study data. There is no default target.
 
 We inject a CSS override at page load to invert the dark theme tokens to a
 light palette — the production frontend ships dark mode, and we don't want
 to rebuild the container just for paper figures.
 
 Usage:
-    python human_study/scripts/capture_screenshots.py
-    python human_study/scripts/capture_screenshots.py --output-dir /path/to/figures
+    python human_study/scripts/capture_screenshots.py --base-url http://localhost:3000
+    python human_study/scripts/capture_screenshots.py --base-url https://study.example.org \
+        --output-dir /path/to/figures
+
+The API is expected at <base-url>/api (the frontend proxies it there); pass
+--api-url when the backend is served elsewhere, e.g. http://localhost:8000.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import time
 import uuid
 from pathlib import Path
@@ -25,8 +32,9 @@ import httpx
 from playwright.async_api import async_playwright
 
 
-BASE_API = "https://usim-study.chats-lab.org/api"
-BASE_WEB = "https://usim-study.chats-lab.org"
+# Set from --base-url / --api-url in __main__; there is deliberately no default.
+BASE_API = ""
+BASE_WEB = ""
 DEFAULT_OUT_DIR = Path(__file__).resolve().parents[1] / "screenshots"
 
 # Inject this as a <style> on every page. Targets the Tailwind utility classes
@@ -310,10 +318,24 @@ async def main(out_dir: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--base-url",
+        default=os.environ.get("STUDY_BASE_URL"),
+        help="frontend root, e.g. https://study.example.org (default: $STUDY_BASE_URL; required)",
+    )
+    parser.add_argument(
+        "--api-url",
+        default=None,
+        help="backend API root (default: <base-url>/api)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=DEFAULT_OUT_DIR,
         help=f"directory for PNG files (default: {DEFAULT_OUT_DIR})",
     )
     args = parser.parse_args()
+    if not args.base_url:
+        parser.error("--base-url (or STUDY_BASE_URL) is required")
+    BASE_WEB = args.base_url.rstrip("/")
+    BASE_API = (args.api_url or f"{BASE_WEB}/api").rstrip("/")
     asyncio.run(main(args.output_dir.resolve()))

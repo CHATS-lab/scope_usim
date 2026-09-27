@@ -1,7 +1,17 @@
 # Deploying the USIM Human Study
 
-This directory holds the deployment artifacts for the Vultr + Cloudflare Tunnel
-setup described in `~/notes/projects/usim_human_study.md`.
+This directory holds the deployment artifacts for a single-VPS setup (Docker
+Compose for Postgres, backend and frontend) exposed through a Cloudflare Tunnel.
+
+The helper scripts run commands over SSH and take the target from environment
+variables. None of them has a default target, so nothing touches a remote host
+or database until you set these:
+
+| Variable | Used by | Meaning |
+| --- | --- | --- |
+| `SSH_HOST` | `bootstrap_vps.sh`, `setup_tunnel.sh`, `bring_up_stack.sh` | SSH host (alias or `user@ip`) of your VPS |
+| `STUDY_DOMAIN` | `setup_tunnel.sh`, `bring_up_stack.sh` | public hostname of the study, e.g. `study.example.org` |
+| `REPO_URL`, `REPO_BRANCH` | `bootstrap_vps.sh` | repository to clone on the VPS (defaults: this repository, `main`) |
 
 ## Local smoke test (macOS / Linux)
 
@@ -23,16 +33,17 @@ npm run dev
 # 3) Visit http://localhost:3000/study?PROLIFIC_PID=testuser&STUDY_ID=s1&SESSION_ID=session1&task_type=p4g
 ```
 
-## Vultr bootstrap
+## VPS bootstrap
 
-Assume Ubuntu 22.04, a fresh 4 vCPU / 16 GB High-Frequency instance.
-Export `VULTR_API_KEY` locally and provision via `vultr-cli` or the web console.
+Assume Ubuntu 22.04 on a fresh 4 vCPU / 16 GB instance from any provider.
+`bootstrap_vps.sh` automates the steps below from your laptop
+(`SSH_HOST=<your-vps> ./deploy/bootstrap_vps.sh`); the manual equivalent is:
 
 ```bash
 # On the VPS
 sudo apt update && sudo apt install -y docker.io docker-compose-plugin
 git clone <your-fork> /opt/usim
-cd /opt/usim && git checkout human_study
+cd /opt/usim
 cd human_study
 cp backend/.env.example backend/.env
 $EDITOR backend/.env             # set OPENAI_API_KEY, COMPLETION_CODE_SECRET
@@ -42,15 +53,17 @@ docker compose up -d --build
 
 ## Cloudflare Tunnel
 
-Follow the inline instructions in `cloudflared-config.yml`, then confirm
-`https://study.your-domain.com` reaches the frontend.
+Follow the inline instructions in `cloudflared-config.yml`, or run
+`SSH_HOST=<your-vps> STUDY_DOMAIN=study.example.org ./deploy/setup_tunnel.sh`,
+then confirm `https://study.example.org` (your domain) reaches the frontend.
 
 ## Migrations
 
 `init_db()` only uses `SQLModel.create_all()` which creates missing tables but
 never alters existing ones. When a release adds columns, apply the matching
-SQL file in `deploy/migrations/` against the live Postgres container before
-rolling out the new code:
+SQL file in `deploy/migrations/` against the production Postgres container before
+rolling out the new code. `bring_up_stack.sh` applies every file in
+`deploy/migrations/` on the VPS given by `SSH_HOST`; to apply one by hand:
 
 ```bash
 # Copy the migration onto the VPS (or git pull) and then:
@@ -90,18 +103,18 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 ## Data access
 
-From your laptop:
+From your laptop, with `SSH_HOST` set to your VPS:
 
 ```bash
-ssh vultr "docker compose -f /opt/usim/human_study/deploy/docker-compose.yml exec postgres \\
+ssh "$SSH_HOST" "docker compose -f /opt/usim/human_study/deploy/docker-compose.yml exec postgres \\
   pg_dump -U usim usim_study" > study_dump.sql
 ```
 
 ## Operational checklist
 
-- [ ] Rotate the Vultr API token before provisioning
+- [ ] Rotate your VPS provider's API token before provisioning
 - [ ] Rotate `COMPLETION_CODE_SECRET` before launch; don't reuse the example
 - [ ] Set up nightly `pg_dump` cron + off-box backup
 - [ ] Add Prolific study with URL template:
-      `https://study.your-domain.com/study?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}&task_type=tau2`
+      `https://study.example.org/study?PROLIFIC_PID={{%PROLIFIC_PID%}}&STUDY_ID={{%STUDY_ID%}}&SESSION_ID={{%SESSION_ID%}}&task_type=tau2`
 - [ ] Pilot with internal testers before opening Prolific

@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Bootstrap a freshly-provisioned Ubuntu 22.04 Vultr VPS for the USIM
+# Bootstrap a freshly-provisioned Ubuntu 22.04 VPS for the USIM
 # human-study deployment.
 #
 # Run this from your laptop AFTER:
-#   - The VPS is reachable via the `usim-study` SSH host (update ~/.ssh/config
-#     with the new IP first)
-#   - You have a checkout of this repo at /opt/usim on the VPS (the script
-#     git-clones if not)
+#   - The VPS is reachable over SSH as $SSH_HOST (an ~/.ssh/config alias or
+#     user@ip)
+#   - backend/.env exists locally with your model endpoints and API keys
+# The script clones this repo to /opt/usim on the VPS if it is not there yet.
 #
 # Usage:
-#   ./deploy/bootstrap_vps.sh
+#   SSH_HOST=<your-vps> ./deploy/bootstrap_vps.sh
 #
 # Idempotent: re-running is safe (skips already-installed pieces).
 set -euo pipefail
 
-SSH_HOST="${SSH_HOST:-usim-study}"
+SSH_HOST="${SSH_HOST:?set SSH_HOST to the SSH host of your VPS}"
 REPO_URL="${REPO_URL:-https://github.com/CHATS-lab/scope_usim.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
 REPO_DIR="/opt/usim"
@@ -67,7 +67,7 @@ fi
 REMOTE
 
 echo "==> Copying backend/.env from laptop -> VPS"
-# The Modal URLs + OpenAI key live in our local backend/.env. We rewrite the
+# The model endpoint URLs and API keys live in the local backend/.env. We rewrite the
 # DATABASE_URL line to use the docker-compose service hostname + the password
 # we just generated on the VPS.
 PG_PASS=$(ssh "$SSH_HOST" 'grep ^POSTGRES_PASSWORD= /opt/usim/human_study/deploy/.env | cut -d= -f2-')

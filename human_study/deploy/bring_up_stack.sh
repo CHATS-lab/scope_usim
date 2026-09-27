@@ -2,10 +2,15 @@
 # Build + start the human-study stack on the VPS, apply migrations, seed
 # tau2 tasks. Run AFTER bootstrap_vps.sh + setup_tunnel.sh.
 #
-# Usage: ./deploy/bring_up_stack.sh
+# This pulls code, restarts containers and applies every SQL migration to the
+# Postgres database on $SSH_HOST. Do not point it at a deployment that is
+# collecting study data unless you mean to upgrade it.
+#
+# Usage: SSH_HOST=<your-vps> STUDY_DOMAIN=study.example.org ./deploy/bring_up_stack.sh
 set -euo pipefail
 
-SSH_HOST="${SSH_HOST:-usim-study}"
+SSH_HOST="${SSH_HOST:?set SSH_HOST to the SSH host of your VPS}"
+STUDY_DOMAIN="${STUDY_DOMAIN:?set STUDY_DOMAIN to the public hostname, e.g. study.example.org}"
 
 echo "==> Pulling latest code on VPS"
 ssh "$SSH_HOST" 'cd /opt/usim && git pull --ff-only'
@@ -44,6 +49,6 @@ ssh "$SSH_HOST" '
 '
 
 echo "==> Stack up. Check:"
-echo "  https://usim-study.chats-lab.org/healthz                   (frontend)"
-echo "  https://usim-study.chats-lab.org/api/healthz               (backend)"
-echo "  https://usim-study.chats-lab.org/study?PROLIFIC_PID=test1&STUDY_ID=internal&SESSION_ID=s1&task_type=tau2"
+echo "  https://${STUDY_DOMAIN}/healthz                   (frontend)"
+echo "  https://${STUDY_DOMAIN}/api/healthz               (backend)"
+echo "  https://${STUDY_DOMAIN}/study?PROLIFIC_PID=test1&STUDY_ID=internal&SESSION_ID=s1&task_type=tau2"
