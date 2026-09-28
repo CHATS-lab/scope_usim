@@ -22,11 +22,10 @@ cmd/slime/
 └── eval_base.sh    # untrained-policy evaluation on tau2-bench, then P4G
 ```
 
-The paper calls the two training-time methods Self-Play and Population
-Self-Play. The code keeps its original identifiers: Self-Play is
-`train_cotrain_slime.py --training-mode dual_cotrain`, and Population Self-Play
-is `--training-mode dual_selfplay` with the `--pool-*` flags. Module names such
-as `usim.slime.cotrain_rollout` use the same `cotrain` prefix.
+In the code, Co-Training is `train_cotrain_slime.py --training-mode dual_cotrain`,
+and Population Co-Training is `--training-mode dual_selfplay` with the `--pool-*`
+flags. Module names such as `usim.slime.cotrain_rollout` use the same `cotrain`
+prefix.
 
 ## Prerequisites
 
@@ -86,7 +85,7 @@ export WANDB_PROJECT="scope"
 | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Modal sandboxes for CooperBench | none |
 
 Launchers that came from the April runs (`ensemble`, `vs_*`,
-`population_self_play`, the ablations) also source `.env` from the repository
+`population_co_training`, the ablations) also source `.env` from the repository
 root when it exists.
 
 ## Paper experiments and their launchers
@@ -104,8 +103,8 @@ release or in the development history it was cut from.
 | Persona-Guided | not applicable (P4G tasks already carry personas) | `tau2/persona_guided.sh` |
 | Ensemble, K=3 | `p4g/ensemble.sh` | `tau2/ensemble.sh` |
 | Verbalized Sampling, GPT-5-mini | `p4g/vs_gpt5mini.sh` | `tau2/vs_gpt5mini.sh` |
-| Self-Play | `p4g/self_play.sh` | `tau2/self_play.sh` |
-| Population Self-Play | `p4g/population_self_play.sh` | `tau2/population_self_play.sh` |
+| Co-Training | `p4g/co_training.sh` | `tau2/co_training.sh` |
+| Population Co-Training | `p4g/population_co_training.sh` | `tau2/population_co_training.sh` |
 | tau2-bench airline column | | None: every tau2 launcher sets `--usim-domain retail` |
 | Qwen3-8B rows and the Qwen3-8B tau2 figure | None | None |
 
@@ -125,7 +124,7 @@ The training curves in the main figure come from the same runs.
 | --- | --- |
 | Cross-play with a frozen partner, Qwen3.5-27B | `COOPERBENCH_SETTING=coop cooperbench/train_qwen3_5_27b.sh` (the partner is `gemini-3-flash-preview`) |
 | Cross-play with Claude Haiku 4.5 as partner | None; change `--cooperbench-partner-model` |
-| Cross-play ensemble (K=3), Self-Play, Population Self-Play | None; `train_cooperbench_slime.py` takes a single API partner and has no trainable-partner or pool mode |
+| Cross-play ensemble (K=3), Co-Training, Population Co-Training | None; `train_cooperbench_slime.py` takes a single API partner and has no trainable-partner or pool mode |
 | Any Qwen3.5-9B run | None |
 | Qwen3.5-27B with Tinker and LoRA adapters | None; the 27B launcher trains all weights with Slime and Megatron |
 
@@ -140,7 +139,7 @@ none answers) and Modal credentials for the sandboxes.
 | Verbalized Sampling with Claude Haiku 4.5 | `ablations/vs_haiku_tau2.sh` |
 | Verbalized Sampling with GPT-4o | `ablations/vs_gpt4o_tau2.sh` |
 | Verbalized Sampling with GPT-5 | None |
-| Simulator reward: curriculum | `tau2/self_play.sh` (`--tau2-user-reward-mode curriculum`) |
+| Simulator reward: curriculum | `tau2/co_training.sh` (`--tau2-user-reward-mode curriculum`) |
 | Simulator reward: cooperative | `ablations/sim_reward_cooperative_tau2.sh` |
 | Simulator reward: adversarial | None; the tau2 co-training rollout has no adversarial reward mode |
 | Pool size K in {1, 3, 5, 10} | None; both pool launchers use `--pool-size 10 --pool-save-interval 16` |
@@ -158,7 +157,7 @@ coefficient of 0.01.
 
 The study app lives in [`../../human_study/`](../../human_study/README.md). It
 serves trained checkpoints through OpenAI-compatible endpoints and defines the
-conditions `base`, `rl_single` and `cotraining` (Self-Play); it has no
+conditions `base`, `rl_single` and `cotraining` (Co-Training); it has no
 Verbalized Sampling condition.
 
 ## Launcher settings
@@ -171,8 +170,8 @@ KL coefficient of 0.005. The launchers were not all run with those values:
 | `*/rl_single_*.sh` | 5e-7 | 1000 | 0.01 | |
 | `tau2/persona_guided.sh` | 1e-6 | 1000 | 0.01 | max response length 16384 |
 | `*/ensemble.sh`, `*/vs_gpt5mini.sh` | 1e-6 | 100 | 0.01 | P4G max response length 16384 |
-| `*/self_play.sh` | 1e-6 | 500 | 0.005 | both roles trained |
-| `*/population_self_play.sh` | 1e-6 | 100 | 0.01 | `--no-agent-kl`, `--pool-size 10`, `--pool-save-interval 16` |
+| `*/co_training.sh` | 1e-6 | 500 | 0.005 | both roles trained |
+| `*/population_co_training.sh` | 1e-6 | 100 | 0.01 | `--no-agent-kl`, `--pool-size 10`, `--pool-save-interval 16` |
 | `ablations/vs_*_tau2.sh` | 1e-6 | 100 | 0.01 | `--usim-vs-method prob` |
 | `cooperbench/train_qwen3_5_27b.sh` | 1e-6 | 500 | 0.01 | no evaluation during training |
 
@@ -191,9 +190,9 @@ The base-evaluation scripts measure the untrained policy at rollout 0
 training; stop it with `ray job stop` once the rollout-0 evaluation is logged.
 `eval_base.sh` starts its P4G job only after the tau2 job ends.
 
-## Self-Play compatibility patch
+## Co-Training compatibility patch
 
-Self-Play and Population Self-Play (`dual_cotrain`, `dual_selfplay`) need the
+Co-Training and Population Co-Training (`dual_cotrain`, `dual_selfplay`) need the
 per-server engine routing in
 [`patches/slime_cotrain_combined.patch`](../../patches/slime_cotrain_combined.patch).
 Apply it once to the pinned Slime submodule:

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Ablation, tau2-bench retail: Self-Play with the cooperative simulator reward
-# (the user receives the agent's reward). The curriculum arm is tau2/self_play.sh.
+# Ablation, tau2-bench retail: Co-Training with the cooperative simulator reward
+# (the user receives the agent's reward). The curriculum arm is tau2/co_training.sh.
 # Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
 # Opponent (trainable): Qwen3-4B-Instruct-2507 via SGLang (same reward as the agent)
 # Both models train independently with NCCL/IPC weight sync

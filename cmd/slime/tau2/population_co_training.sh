@@ -1,13 +1,10 @@
 #!/bin/bash
 
-# tau2-bench retail, Self-Play (code name: --training-mode dual_cotrain) with the
-# curriculum simulator reward.
-# Agent:  Qwen3-4B-Instruct-2507, reward = task evaluator score ∈ {0,1}.
-# User:   Qwen3-4B-Instruct-2507, reward = exp(-(var - 0.25)^2 / 0.02) per
-#         prompt group, with a -0.1 tax on tau2 tool errors. User is rewarded
-#         for producing difficulty that splits agent outcomes ~50/50 (max
-#         Bernoulli variance).
-# Date: 2026-04-17
+# tau2-bench retail, Population Co-Training (code name: --training-mode
+# dual_selfplay): the user for each rollout is loaded from a checkpoint pool.
+# Agent (trainable): Qwen3-4B-Instruct-2507 via SGLang
+# Opponent (pool): Historical checkpoints, randomly selected
+# Date: 2026-04-03
 #
 # Node use: before launching, this script kills every SGLang and Ray
 # process on the machine (pkill -9 sglang; ray stop --force; pkill -9 ray)
@@ -31,20 +28,21 @@ set -e
 
 export PYTHONUNBUFFERED=1
 export WEAVE_PRINT_CALL_LINK=false
-# Note: PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True (set in 0313 scripts)
-# is incompatible with SGLang's TorchMemorySaver used by
-# --offload-rollout / --offload-train. 0403 scripts don't set it either.
-# Leave unset.
 
-NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
-if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
-echo "HAS_NVLINK: $HAS_NVLINK"
-
+# Load secrets
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+if [ -f "${PROJECT_ROOT}/.env" ]; then
+    set -a; source "${PROJECT_ROOT}/.env"; set +a
+fi
 SLIME_DIR="${PROJECT_ROOT}/slime"
 
-OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/results/tau2_self_play/$(date +%Y%m%d_%H%M%S)}"
+# Detect NVLink
+NVLINK_COUNT=$(nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l)
+if [ "$NVLINK_COUNT" -gt 0 ]; then HAS_NVLINK=1; else HAS_NVLINK=0; fi
+echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
+
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/results/tau2_population_co_training/$(date +%Y%m%d_%H%M%S)}"
 MODEL_DIR="${MODEL_DIR:?set MODEL_DIR to the directory that holds the model checkpoints; see cmd/slime/README.md}"
 
 mkdir -p "${OUTPUT_DIR}"
@@ -54,14 +52,14 @@ source "${SLIME_DIR}/scripts/models/qwen3-4B-Instruct-2507.sh"
 CKPT_ARGS=(
    --hf-checkpoint "${MODEL_DIR}/Qwen3-4B-Instruct-2507"
    --ref-load "${MODEL_DIR}/Qwen3-4B-Instruct-2507_torch_dist"
-   --save "${OUTPUT_DIR}/qwen3-4B-Instruct-2507_tau2_cotrain_curriculum/"
-   --save-interval 32
+   --save "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_evolving_ckpt_tau2/"
+   --save-interval 16
 )
 
 ROLLOUT_ARGS=(
    --data-source-path usim.slime.data_source.get_tau2_data_source
    --rollout-function-path usim.slime.tau2_cotrain_rollout.tau2_cotrain_generate_rollout
-   --num-rollout 500
+   --num-rollout 100
    --rollout-batch-size 16
    --n-samples-per-prompt 8
    --rollout-max-response-len 32768
@@ -70,17 +68,27 @@ ROLLOUT_ARGS=(
    --balance-data
 )
 
-# Co-train with curriculum user reward.
 COTRAIN_ARGS=(
-   --training-mode dual_cotrain
-   --trainable-role both
+   --training-mode dual_selfplay
+   --trainable-role agent
    --max-turns 30
-   --tau2-user-reward-mode curriculum
-   --tau2-tool-error-penalty -0.1
+   # --cooperative-reward is read only by the P4G co-training rollout. The tau2
+   # rollout always gives the user the agent's reward unless
+   # --tau2-user-reward-mode curriculum is set.
+   --cooperative-reward
+   --no-agent-kl
+   --pool-dir "${OUTPUT_DIR}/checkpoint_pool"
+   --pool-size 10
+   --pool-save-interval 16
+   --pool-selection random
 )
 
 TAU2_ARGS=(
    --usim-domain retail
+)
+
+TRAJECTORY_ARGS=(
+   --trajectory-output-dir "${OUTPUT_DIR}/trajectories"
 )
 
 PERF_ARGS=(
@@ -101,7 +109,7 @@ GRPO_ARGS=(
    --disable-grpo-std-normalization
    --disable-rewards-normalization
    --use-kl-loss
-   --kl-loss-coef 0.005
+   --kl-loss-coef 0.01
    --kl-loss-type low_var_kl
    --entropy-coef 0.00
    --eps-clip 0.2
@@ -111,7 +119,7 @@ GRPO_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project "${WANDB_PROJECT:-scope}"
-   --wandb-group qwen3-4b-tau2-cotrain-curriculum-0417
+   --wandb-group qwen3-4B-Instruct-2507-tau2-evolving-ckpt-0403
 )
 
 EVAL_CONFIG_FILE="${OUTPUT_DIR}/eval_config.yaml"
@@ -146,8 +154,7 @@ MISC_ARGS=(
 )
 
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
-ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-stats \
-   --dashboard-host=0.0.0.0 --dashboard-port=8265
+ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265
 
 RUNTIME_ENV_JSON="{
   \"env_vars\": {
@@ -165,11 +172,13 @@ ray job submit --address="http://127.0.0.1:8265" \
    --colocate \
    --offload-rollout \
    --offload-train \
+   --save-hf "${OUTPUT_DIR}/Qwen3-4B-Instruct-2507_evolving_ckpt_tau2_hf/" \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
    ${COTRAIN_ARGS[@]} \
    ${TAU2_ARGS[@]} \
+   ${TRAJECTORY_ARGS[@]} \
    ${EVAL_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \
    ${GRPO_ARGS[@]} \

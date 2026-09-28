@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "usim"
 version = "0.1.0"
-description = "SCOPE: Self-Play with Co-Evolving Users Prevents Simulator Collapse in Multi-Agent RL"
+description = "One Frozen Simulator Is Not Enough: Simulator Collapse in Multi-Agent RL"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

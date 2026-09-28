@@ -45,7 +45,7 @@ Replace `study.example.org` with your own deployment's domain.
 
 The backend assigns a condition server-side on session creation, stratified to
 keep cell counts balanced. It defines three conditions: `base`, `rl_single`,
-and `cotraining` (the paper's Self-Play policy). Each condition is served by
+and `cotraining` (the paper's Co-Training policy). Each condition is served by
 its own `MODEL_*` / `OPENAI_BASE_URL_*` pair in `backend/.env`. The app has no
 Verbalized Sampling condition; see the note below.
 

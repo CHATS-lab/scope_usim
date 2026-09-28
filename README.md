@@ -2,8 +2,8 @@
 
 <img src="assets/scope-logo.png" alt="SCOPE logo" width="140">
 
-<h1>SCOPE</h1>
-<h3>Self-Play with Co-Evolving Users Prevents Simulator Collapse in Multi-Agent RL</h3>
+<h1>SCOPE: One Frozen Simulator Is Not Enough</h1>
+<h3>Simulator Collapse in Multi-Agent RL</h3>
 
 [![Paper](https://img.shields.io/badge/Paper-2608.12253-b31b1b?style=for-the-badge)](https://arxiv.org/abs/2608.12253)
 [![Conference](https://img.shields.io/badge/EMNLP-2026%20Main-4c7bd9?style=for-the-badge)](https://2026.emnlp.org/)
@@ -26,7 +26,7 @@ Simon Yu · Nicholas Tomlin · Marwa Abdulhai · Ximing Lu · Derek Chong · Abe
   <a href="#citation">Citation</a>
 </p>
 
-**SCOPE** is the code for training LLM agents with reinforcement learning against LLM user simulators. One rollout interface covers four ways to supply the simulator: a single frozen API model, a rotation over several frozen models, a frozen model queried with Verbalized Sampling, and a second trainable model (Self-Play), which can also be drawn from a pool of its own saved checkpoints (Population Self-Play). The dialogue environments are Persuasion for Good (P4G) and τ²-bench. CooperBench runs with a frozen API partner.
+**SCOPE** is the code for training LLM agents with reinforcement learning against LLM user simulators. One rollout interface covers four ways to supply the simulator: a single frozen API model, a rotation over several frozen models, a frozen model queried with Verbalized Sampling, and a second trainable model (Co-Training), which can also be drawn from a pool of its own saved checkpoints (Population Co-Training). The dialogue environments are Persuasion for Good (P4G) and τ²-bench. CooperBench runs with a frozen API partner.
 
 An agent trained against one frozen simulator learns that simulator's dominant script. Its training reward keeps rising while its reward against unseen simulators falls and its policy entropy drops. The paper calls this **simulator collapse** and studies one inference-time fix and one training-time fix.
 
@@ -92,16 +92,16 @@ The paper formalizes this as a biased policy gradient. When the simulator's beha
 ## Methods
 
 <p align="center">
-  <img src="assets/scope-methods.png" width="100%" alt="Comparison of single-simulator RL, Verbalized Sampling, and Self-Play">
+  <img src="assets/scope-methods.png" width="100%" alt="Comparison of single-simulator RL, Verbalized Sampling, and Co-Training">
 </p>
 
 Verbalized Sampling works at inference time. On every user turn the frozen simulator returns several candidate replies in one JSON response, and the rollout continues with one of them. Three flags control it: `--usim-verbalized-sampling` switches it on, `--usim-vs-num-samples` sets the number of candidates (5 in the released launchers), and `--usim-vs-method` chooses how the reply is drawn. With `prob`, the simulator also states a probability for each candidate and the draw is weighted by those numbers. With `random`, the prompt asks for candidates only and the draw is uniform. The two `vs_gpt5mini.sh` launchers use `random`.
 
-Self-Play works at training time. A second copy of the policy model plays the user and is updated on its own turns of the same conversations, so the behavior the agent could overfit to keeps moving. Population Self-Play keeps a pool of the simulator's saved checkpoints and loads a randomly chosen one before each rollout.
+Co-Training works at training time. A second copy of the policy model plays the user and is updated on its own turns of the same conversations, so the behavior the agent could overfit to keeps moving. Population Co-Training keeps a pool of the simulator's saved checkpoints and loads a randomly chosen one before each rollout.
 
-The code predates these names. Self-Play is `train_cotrain_slime.py --training-mode dual_cotrain`, Population Self-Play is `--training-mode dual_selfplay` with the `--pool-*` flags, and the rollout modules are `usim.slime.cotrain_rollout` (P4G) and `usim.slime.tau2_cotrain_rollout` (τ²-bench). Each task sets the simulator's reward. In P4G the persuadee is rewarded for keeping the donation low. In τ²-bench, `--tau2-user-reward-mode curriculum` rewards the simulator when the agent's successes across the 8 rollouts of a task come close to an even split.
+In the code, Co-Training is `train_cotrain_slime.py --training-mode dual_cotrain`, Population Co-Training is `--training-mode dual_selfplay` with the `--pool-*` flags, and the rollout modules are `usim.slime.cotrain_rollout` (P4G) and `usim.slime.tau2_cotrain_rollout` (τ²-bench). Each task sets the simulator's reward. In P4G the persuadee is rewarded for keeping the donation low. In τ²-bench, `--tau2-user-reward-mode curriculum` rewards the simulator when the agent's successes across the 8 rollouts of a task come close to an even split.
 
-On CooperBench, the released code trains a single coding agent in the `baseline`, `solo`, or `coop` setting, and in `coop` the partner is a fixed API model. There is no Verbalized Sampling, Self-Play, or checkpoint-pool mode for CooperBench.
+On CooperBench, the released code trains a single coding agent in the `baseline`, `solo`, or `coop` setting, and in `coop` the partner is a fixed API model. There is no Verbalized Sampling, Co-Training, or checkpoint-pool mode for CooperBench.
 
 ## Results
 
@@ -130,22 +130,22 @@ task + environment
    agent optimizer                               frozen / rotating / trainable
 ```
 
-The environment protocol does not depend on the training backend. The Slime adapters turn each finished trajectory into per-role tokens, loss masks, rollout log-probabilities, and rewards. In Self-Play the agent and the simulator are two Slime training groups on separate halves of one 8-GPU node, and each is updated from its own turns.
+The environment protocol does not depend on the training backend. The Slime adapters turn each finished trajectory into per-role tokens, loss masks, rollout log-probabilities, and rewards. In Co-Training the agent and the simulator are two Slime training groups on separate halves of one 8-GPU node, and each is updated from its own turns.
 
 ## Repository layout
 
 ```text
 scope_usim/
 ├── usim/                    # environments, orchestration, rewards, Slime adapters
-├── train_*_slime.py         # Slime entry points: tau2, P4G, Self-Play, CooperBench
+├── train_*_slime.py         # Slime entry points: tau2, P4G, Co-Training, CooperBench
 ├── cmd/slime/               # one launcher per paper experiment
-├── configs/sglang/          # SGLang server layouts for Self-Play
+├── configs/sglang/          # SGLang server layouts for Co-Training
 ├── eval_configs/            # held-out simulator panels
 ├── data/                    # P4G corpus and split, CooperBench task splits
 ├── scripts/                 # diagnostics and a CooperBench sandbox check
 ├── human_study/             # study app, deployment, and survey files
 ├── tests/                   # unit tests
-├── patches/                 # Slime patch needed for Self-Play
+├── patches/                 # Slime patch needed for Co-Training
 ├── slime/                   # Slime submodule
 └── external/                # tau2-bench and CooperBench submodules
 ```
@@ -176,7 +176,7 @@ If SCOPE is useful in your work, please cite:
 
 ```bibtex
 @misc{yu2026onefrozen,
-  title         = {SCOPE: Self-Play with Co-Evolving Users Prevents Simulator Collapse in Multi-Agent RL},
+  title         = {One Frozen Simulator Is Not Enough: Simulator Collapse in Multi-Agent RL},
   author        = {Yu, Simon and Tomlin, Nicholas and Abdulhai, Marwa and Lu, Ximing and
                    Chong, Derek and Hou, Abe and Soylu, Dilara and Levine, Sergey and
                    Manning, Christopher D. and Shi, Weiyan},
